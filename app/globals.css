@@ -1,26 +1,222 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  body {
+    @apply bg-black text-white;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  html {
+    scroll-behavior: smooth;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer components {
+  /* Navigation Styles */
+  .nav-scrolled {
+    @apply bg-black/95 backdrop-blur-lg border-b border-white/10;
+  }
+
+  /* Hero Gradient */
+  .hero-gradient {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  }
+
+  /* Glass morphism effect */
+  .glass {
+    @apply bg-white/10 backdrop-blur-lg border border-white/20;
+  }
+
+  /* Portfolio item hover effects */
+  .portfolio-item {
+    @apply relative overflow-hidden rounded-2xl cursor-pointer transition-all duration-500 hover:scale-105 hover:shadow-2xl;
+  }
+
+  .portfolio-item::before {
+    content: '';
+    @apply absolute inset-0 bg-gradient-to-br from-primary-500/20 to-secondary-500/20 opacity-0 transition-opacity duration-300;
+  }
+
+  .portfolio-item:hover::before {
+    @apply opacity-100;
+  }
+
+  /* Gallery grid */
+  .gallery-grid {
+    @apply grid gap-6;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  }
+
+  /* Image aspect ratios */
+  .aspect-photo {
+    aspect-ratio: 4/3;
+  }
+
+  .aspect-portrait {
+    aspect-ratio: 3/4;
+  }
+
+  /* Loading animations */
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-fade-in-up {
+    animation: fadeInUp 0.6s ease-out;
+  }
+
+  /* Gradient text */
+  .gradient-text {
+    @apply bg-gradient-to-r from-primary-400 to-secondary-400 bg-clip-text text-transparent;
+  }
+
+  /* Button styles */
+  .btn-primary {
+    @apply bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-1;
+  }
+
+  .btn-secondary {
+    @apply bg-gradient-to-r from-secondary-500 to-secondary-600 hover:from-secondary-600 hover:to-secondary-700 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-1;
+  }
+
+  .btn-ghost {
+    @apply bg-white/10 hover:bg-white/20 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-300 backdrop-blur-sm border border-white/20 hover:border-white/30;
+  }
+
+  /* Form styles */
+  .form-input {
+    @apply w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-300;
+  }
+
+  .form-textarea {
+    @apply w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-300 resize-vertical min-h-[120px];
+  }
+
+  .form-select {
+    @apply w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-300;
+  }
+
+  /* Modal styles */
+  .modal-overlay {
+    @apply fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4;
+  }
+
+  .modal-content {
+    @apply bg-gray-900 rounded-2xl border border-white/20 shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto;
+  }
+
+  /* Lightbox styles */
+  .lightbox {
+    @apply fixed inset-0 bg-black/95 backdrop-blur-sm z-50 flex items-center justify-center p-4;
+  }
+
+  /* Admin panel styles */
+  .admin-card {
+    @apply bg-gray-800/50 rounded-xl border border-gray-700 p-6 hover:bg-gray-800/70 transition-all duration-300;
+  }
+
+  /* Notification styles */
+  .notification-success {
+    @apply bg-green-500 text-white;
+  }
+
+  .notification-error {
+    @apply bg-red-500 text-white;
+  }
+
+  .notification-warning {
+    @apply bg-yellow-500 text-black;
+  }
+
+  .notification-info {
+    @apply bg-blue-500 text-white;
+  }
+
+  /* Spinner */
+  .spinner {
+    @apply animate-spin rounded-full border-2 border-white/20 border-t-primary-500;
+  }
+
+  /* Progress bar */
+  .progress-bar {
+    @apply w-full bg-gray-700 rounded-full h-2;
+  }
+
+  .progress-fill {
+    @apply bg-gradient-to-r from-primary-500 to-secondary-500 h-2 rounded-full transition-all duration-300;
+  }
+
+  /* Scrollbar styles */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-gray-800 rounded-lg;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-gray-600 rounded-lg hover:bg-gray-500;
+  }
+
+  /* Category cards */
+  .category-card {
+    @apply relative overflow-hidden rounded-xl aspect-photo cursor-pointer group;
+  }
+
+  .category-card::before {
+    content: '';
+    @apply absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent z-10;
+  }
+
+  .category-card:hover::before {
+    @apply from-black/60 via-black/10;
+  }
+
+  /* Image optimization classes */
+  .image-optimized {
+    @apply transition-all duration-300;
+  }
+
+  .image-loading {
+    @apply bg-gray-800 animate-pulse;
+  }
+
+  .image-error {
+    @apply bg-gray-800 flex items-center justify-center text-gray-400;
+  }
+}
+
+@layer utilities {
+  .text-shadow {
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+  }
+
+  .text-shadow-lg {
+    text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.9);
+  }
+
+  .backdrop-blur-xs {
+    backdrop-filter: blur(2px);
+  }
+}
+
+/* Print styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
 }
