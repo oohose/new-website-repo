@@ -5,7 +5,6 @@ import { motion } from 'framer-motion'
 import Link from 'next/link'
 import Image from 'next/image'
 import { Eye, ArrowRight } from 'lucide-react'
-import { getThumbnailUrl } from '@/lib/cloudinary'
 
 interface Category {
   id: string
@@ -28,7 +27,13 @@ export default function Portfolio({ categories, recentImages }: PortfolioProps) 
 
   useEffect(() => {
     setMounted(true)
+    fetch('/api/images')
+    .then(res => res.json())
+    .then(data => setImages(data))
+    .catch(error => console.error('Error:', error))
   }, [])
+
+  
 
   if (!mounted) {
     return <div className="h-96 bg-gray-900 animate-pulse" />

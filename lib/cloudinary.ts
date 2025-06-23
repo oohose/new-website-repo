@@ -34,7 +34,7 @@ export async function uploadToCloudinary(
   fileBuffer: Buffer,
   options: UploadOptions = {}
 ): Promise<CloudinaryUploadResult> {
-  const defaultOptions: UploadOptions = {
+   const defaultOptions: UploadOptions = {
     folder: 'peyton-portfolio',
     quality: 'auto:good',
     format: 'auto',
@@ -47,8 +47,7 @@ export async function uploadToCloudinary(
         quality: 'auto:good',
         fetch_format: 'auto'
       }
-    ],
-    ...options
+    ]
   };
 
   return new Promise((resolve, reject) => {
@@ -143,5 +142,7 @@ export function getDisplayUrl(
     }
   ]);
 }
+
+
 
 export default cloudinary;

@@ -15,6 +15,10 @@ export default function Hero() {
     <section id="home" className="relative h-screen flex items-center justify-center overflow-hidden">
       {/* Background Gradient */}
       <div className="absolute inset-0 hero-gradient" />
+
+      <div className="bg-blue-500 text-white p-4 rounded">
+  TEST: This should be blue with white text
+</div>
       
       {/* Animated Background Pattern */}
       <div className="absolute inset-0 opacity-30">
