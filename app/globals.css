@@ -74,6 +74,34 @@
     }
   }
 
+  /* Dynamic About Section Grid */
+.about-section-grid {
+  @apply grid gap-12 lg:gap-20 items-center;
+}
+
+@media (min-width: 1024px) {
+  .about-section-grid {
+    grid-template-columns: 1fr auto;
+    align-items: start;
+  }
+}
+
+/* Dynamic image container */
+.dynamic-about-image {
+  width: fit-content !important;
+  max-width: 90vw !important;
+  height: auto !important;
+  aspect-ratio: auto !important;
+}
+
+.dynamic-about-image img {
+  width: auto !important;
+  height: auto !important;
+  max-width: 90vw !important;
+  max-height: 70vh !important;
+  object-fit: contain !important;
+}
+
   .animate-fade-in-up {
     animation: fadeInUp 0.6s ease-out;
   }

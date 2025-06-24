@@ -8,12 +8,14 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const includePrivate = searchParams.get('includePrivate') === 'true'
     
+    // Check if user is admin for private categories
     const session = await getServerSession(authOptions)
     const isAdmin = session?.user?.role === 'ADMIN'
 
     const categories = await db.category.findMany({
       where: {
-        ...(!(includePrivate && isAdmin) && { isPrivate: false })
+        // Only include private categories if user is admin and requested
+        ...(includePrivate && isAdmin ? {} : { isPrivate: false })
       },
       include: {
         _count: {
@@ -21,8 +23,13 @@ export async function GET(request: NextRequest) {
         },
         images: {
           take: 1,
-          orderBy: {
-            createdAt: 'desc'
+          orderBy: { createdAt: 'desc' }
+        },
+        subcategories: {
+          include: {
+            _count: {
+              select: { images: true }
+            }
           }
         }
       },
@@ -51,24 +58,36 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { name, description, isPrivate } = body
+    const { name, key, description, isPrivate, parentId } = body
 
-    if (!name?.trim()) {
+    // Validate required fields
+    if (!name || !key) {
       return NextResponse.json(
-        { error: 'Category name is required' }, 
+        { error: 'Name and key are required' }, 
         { status: 400 }
       )
     }
 
-    // Create a URL-friendly key from the name
-    const key = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-')
+    // Check if key already exists
+    const existingCategory = await db.category.findUnique({
+      where: { key }
+    })
 
-    const savedCategory = await db.category.create({
+    if (existingCategory) {
+      return NextResponse.json(
+        { error: 'Category key already exists' }, 
+        { status: 400 }
+      )
+    }
+
+    // Create category
+    const category = await db.category.create({
       data: {
         name: name.trim(),
-        key: key,
+        key: key.trim(),
         description: description?.trim() || null,
-        isPrivate: isPrivate || false,
+        isPrivate: Boolean(isPrivate),
+        parentId: parentId || null
       },
       include: {
         _count: {
@@ -79,7 +98,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ 
       success: true, 
-      category: savedCategory 
+      category 
     })
 
   } catch (error) {

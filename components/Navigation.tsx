@@ -2,14 +2,14 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { useSession, signIn, signOut } from 'next-auth/react'
-import { Menu, X, User, LogOut } from 'lucide-react'
-import { siteConfig } from '@/config/site'
+import { useSession, signOut } from 'next-auth/react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Menu, X, User, LogOut, Settings } from 'lucide-react'
 
-export default function Navigation() {
+export default function ModernNavigation() {
+  const [isOpen, setIsOpen] = useState(false)
   const [isScrolled, setIsScrolled] = useState(false)
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
-  const { data: session, status } = useSession()
+  const { data: session } = useSession()
 
   useEffect(() => {
     const handleScroll = () => {
@@ -20,156 +20,207 @@ export default function Navigation() {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
-  const handleSmoothScroll = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
-    e.preventDefault()
-    const element = document.querySelector(href)
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth' })
-      setIsMobileMenuOpen(false)
-    }
-  }
-
-  const isAdmin = session?.user?.role === 'ADMIN'
+  const navItems = [
+    { href: '/', label: 'Home' },
+    { href: '/#portfolio', label: 'Portfolio' },
+    { href: '/about', label: 'About' },
+    { href: '/contact', label: 'Contact' },
+  ]
 
   return (
-    <nav
-      className={`fixed top-0 w-full z-50 transition-all duration-300 ${
-        isScrolled ? 'nav-scrolled' : 'bg-transparent'
-      }`}
-    >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16 lg:h-20">
-          {/* Logo */}
-          <Link 
-            href="/" 
-            className="text-xl lg:text-2xl font-bold gradient-text tracking-wider"
-          >
-            {siteConfig.photographer.name.toUpperCase()}
-          </Link>
-
-          {/* Desktop Navigation */}
-          <div className="hidden lg:flex items-center space-x-8">
-            {siteConfig.navigation.main.map((item) => (
-              <Link
-                key={item.name}
-                href={item.href}
-                onClick={(e) => handleSmoothScroll(e, item.href)}
-                className="text-white hover:text-primary-400 transition-colors font-medium"
+    <>
+      <nav className={`fixed top-0 w-full z-50 transition-all duration-300 ${
+        isScrolled 
+          ? 'bg-white/95 backdrop-blur-sm border-b border-gray-200/50' 
+          : 'bg-transparent'
+      }`}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16 lg:h-20">
+            {/* Logo */}
+            <Link href="/" className="group">
+              <motion.div
+                whileHover={{ scale: 1.05 }}
+                transition={{ duration: 0.2 }}
+                className={`text-xl lg:text-2xl font-light tracking-wide transition-colors duration-300 ${
+                  isScrolled ? 'text-gray-900' : 'text-white'
+                }`}
               >
-                {item.name}
-              </Link>
-            ))}
-            
-            {/* Admin Section */}
-            {isAdmin && (
-              <Link
-                href="/admin"
-                className="text-white hover:text-primary-400 transition-colors font-medium"
-              >
-                Admin
-              </Link>
-            )}
+                Peyton Snipes
+              </motion.div>
+            </Link>
 
-            {/* Auth Button */}
-            <div className="flex items-center space-x-4">
-              {status === 'loading' ? (
-                <div className="w-8 h-8 spinner" />
-              ) : session ? (
-                <div className="flex items-center space-x-2">
-                  <span className="text-sm text-white/80">
-                    {session.user.name || session.user.email}
-                  </span>
+            {/* Desktop Navigation */}
+            <div className="hidden lg:flex items-center space-x-8">
+              {navItems.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`text-sm font-light tracking-wide transition-colors duration-300 hover:opacity-70 ${
+                    isScrolled ? 'text-gray-900' : 'text-white'
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              ))}
+
+              {/* Admin/User Menu */}
+              {session ? (
+                <div className="flex items-center space-x-4">
+                  {session.user?.role === 'ADMIN' && (
+                    <Link
+                      href="/admin"
+                      className={`p-2 rounded-full transition-colors duration-300 ${
+                        isScrolled 
+                          ? 'text-gray-900 hover:bg-gray-100' 
+                          : 'text-white hover:bg-white/10'
+                      }`}
+                    >
+                      <Settings className="w-4 h-4" />
+                    </Link>
+                  )}
                   <button
                     onClick={() => signOut()}
-                    className="flex items-center space-x-1 text-white hover:text-red-400 transition-colors"
+                    className={`p-2 rounded-full transition-colors duration-300 ${
+                      isScrolled 
+                        ? 'text-gray-900 hover:bg-gray-100' 
+                        : 'text-white hover:bg-white/10'
+                    }`}
                   >
                     <LogOut className="w-4 h-4" />
-                    <span className="text-sm">Logout</span>
                   </button>
                 </div>
               ) : (
-                <button
-                  onClick={() => signIn()}
-                  className="flex items-center space-x-1 btn-ghost text-sm"
+                <Link
+                  href="/auth/signin"
+                  className={`p-2 rounded-full transition-colors duration-300 ${
+                    isScrolled 
+                      ? 'text-gray-900 hover:bg-gray-100' 
+                      : 'text-white hover:bg-white/10'
+                  }`}
                 >
                   <User className="w-4 h-4" />
-                  <span>Login</span>
-                </button>
+                </Link>
               )}
             </div>
-          </div>
 
-          {/* Mobile menu button */}
-          <button
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="lg:hidden text-white hover:text-primary-400 transition-colors"
-          >
-            {isMobileMenuOpen ? (
-              <X className="w-6 h-6" />
-            ) : (
-              <Menu className="w-6 h-6" />
-            )}
-          </button>
+            {/* Mobile menu button */}
+            <button
+              onClick={() => setIsOpen(!isOpen)}
+              className={`lg:hidden p-2 rounded-md transition-colors duration-300 ${
+                isScrolled 
+                  ? 'text-gray-900 hover:bg-gray-100' 
+                  : 'text-white hover:bg-white/10'
+              }`}
+            >
+              {isOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
+          </div>
         </div>
+      </nav>
 
-        {/* Mobile Navigation */}
-        {isMobileMenuOpen && (
-          <div className="lg:hidden">
-            <div className="px-2 pt-2 pb-3 space-y-1 bg-black/95 backdrop-blur-lg rounded-lg mt-2">
-              {siteConfig.navigation.main.map((item) => (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  onClick={(e) => handleSmoothScroll(e, item.href)}
-                  className="block px-3 py-2 text-white hover:text-primary-400 transition-colors font-medium"
-                >
-                  {item.name}
-                </Link>
-              ))}
-              
-              {isAdmin && (
-                <Link
-                  href="/admin"
-                  className="block px-3 py-2 text-white hover:text-primary-400 transition-colors font-medium"
-                >
-                  Admin
-                </Link>
-              )}
+      {/* Mobile Menu */}
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-40 lg:hidden"
+          >
+            {/* Backdrop */}
+            <div
+              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+              onClick={() => setIsOpen(false)}
+            />
 
-              <div className="border-t border-white/20 pt-2">
-                {session ? (
-                  <div className="px-3 py-2">
-                    <div className="text-sm text-white/80 mb-2">
-                      {session.user.name || session.user.email}
-                    </div>
-                    <button
-                      onClick={() => {
-                        signOut()
-                        setIsMobileMenuOpen(false)
-                      }}
-                      className="flex items-center space-x-1 text-white hover:text-red-400 transition-colors"
-                    >
-                      <LogOut className="w-4 h-4" />
-                      <span className="text-sm">Logout</span>
-                    </button>
-                  </div>
-                ) : (
+            {/* Menu Panel */}
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ duration: 0.3, ease: 'easeInOut' }}
+              className="absolute right-0 top-0 h-full w-80 bg-white shadow-xl"
+            >
+              <div className="flex flex-col h-full">
+                {/* Header */}
+                <div className="flex items-center justify-between p-6 border-b border-gray-200">
+                  <h2 className="text-lg font-light text-gray-900">Menu</h2>
                   <button
-                    onClick={() => {
-                      signIn()
-                      setIsMobileMenuOpen(false)
-                    }}
-                    className="flex items-center space-x-1 text-white hover:text-primary-400 transition-colors px-3 py-2"
+                    onClick={() => setIsOpen(false)}
+                    className="p-2 rounded-md text-gray-500 hover:bg-gray-100 transition-colors"
                   >
-                    <User className="w-4 h-4" />
-                    <span className="text-sm">Login</span>
+                    <X className="w-5 h-5" />
                   </button>
-                )}
+                </div>
+
+                {/* Navigation Links */}
+                <div className="flex-1 py-6">
+                  <div className="space-y-1">
+                    {navItems.map((item) => (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={() => setIsOpen(false)}
+                        className="block px-6 py-3 text-gray-900 hover:bg-gray-50 transition-colors duration-200 font-light"
+                      >
+                        {item.label}
+                      </Link>
+                    ))}
+                  </div>
+
+                  {/* Auth Section */}
+                  <div className="mt-8 pt-8 border-t border-gray-200">
+                    {session ? (
+                      <div className="space-y-1">
+                        <div className="px-6 py-2">
+                          <p className="text-sm font-medium text-gray-900">
+                            {session.user?.name || session.user?.email}
+                          </p>
+                          <p className="text-xs text-gray-500 capitalize">
+                            {session.user?.role?.toLowerCase() || 'user'}
+                          </p>
+                        </div>
+                        
+                        {session.user?.role === 'ADMIN' && (
+                          <Link
+                            href="/admin"
+                            onClick={() => setIsOpen(false)}
+                            className="flex items-center px-6 py-3 text-gray-700 hover:bg-gray-50 transition-colors"
+                          >
+                            <Settings className="w-4 h-4 mr-3" />
+                            Admin Panel
+                          </Link>
+                        )}
+                        
+                        <button
+                          onClick={() => {
+                            signOut()
+                            setIsOpen(false)
+                          }}
+                          className="flex items-center w-full px-6 py-3 text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                          <LogOut className="w-4 h-4 mr-3" />
+                          Sign Out
+                        </button>
+                      </div>
+                    ) : (
+                      <Link
+                        href="/auth/signin"
+                        onClick={() => setIsOpen(false)}
+                        className="flex items-center px-6 py-3 text-gray-700 hover:bg-gray-50 transition-colors"
+                      >
+                        <User className="w-4 h-4 mr-3" />
+                        Sign In
+                      </Link>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
         )}
-      </div>
-    </nav>
+      </AnimatePresence>
+    </>
   )
 }

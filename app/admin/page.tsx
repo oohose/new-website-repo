@@ -1,16 +1,14 @@
 'use client'
 
 import { Suspense } from 'react'
-import AdminDashboard from '@/components/admin/AdminDashboard'
+import { default as AdminDashboard } from '@/components/admin/AdminDashboard'
 import CloudinaryUpload from '@/components/admin/CloudinaryUpload'
 
 export default function AdminPage() {
   return (
-    <AdminDashboard>
-      <Suspense fallback={<div className="text-white">Loading...</div>}>
-        <AdminContent />
-      </Suspense>
-    </AdminDashboard>
+    <Suspense fallback={<div className="text-white">Loading...</div>}>
+      <AdminDashboard />
+    </Suspense>
   )
 }
 

@@ -67,32 +67,7 @@ export const siteConfig = {
   },
 
   // Services/Specialties
-  services: [
-    {
-      title: "Wedding Photography",
-      description: "Capturing your special day with timeless elegance",
-      icon: "💍",
-      featured: true
-    },
-    {
-      title: "Portrait Sessions", 
-      description: "Professional headshots and personal portraits",
-      icon: "📸",
-      featured: true
-    },
-    {
-      title: "Event Photography",
-      description: "Corporate events, parties, and special occasions",
-      icon: "🎉",
-      featured: true
-    },
-    {
-      title: "Family Photos",
-      description: "Precious family moments to treasure forever",
-      icon: "👨‍👩‍👧‍👦",
-      featured: false
-    },
-  ],
+  services: [],
 
   // Content Sections
   content: {
@@ -142,7 +117,6 @@ export const {
   contact,
   navigation,
   seo,
-  services,
   content,
   theme,
   footer

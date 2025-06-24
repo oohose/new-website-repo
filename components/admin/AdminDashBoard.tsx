@@ -19,6 +19,17 @@ import { siteConfig } from '@/config/site'
 import CloudinaryUpload from './CloudinaryUpload'
 import { CategoryManager } from './InlineEditComponents'
 
+interface Category {
+  id: string
+  key: string
+  name: string
+  description: string | null
+  isPrivate: boolean
+  images: any[]
+  subcategories: any[]
+  _count: { images: number }
+}
+
 interface AdminDashboardProps {
   children?: React.ReactNode
 }
@@ -32,7 +43,7 @@ export default function AdminDashboard({ children }: AdminDashboardProps) {
     totalViews: 0,
     storageUsed: '0 MB'
   })
-  const [categories, setCategories] = useState([])
+  const [categories, setCategories] = useState<Category[]>([])
 
   useEffect(() => {
     // Fetch categories and stats when component mounts
@@ -94,7 +105,7 @@ export default function AdminDashboard({ children }: AdminDashboardProps) {
   ]
 
   // API functions for category management
-  const updateCategory = async (id: string, data: any) => {
+  const updateCategory = async (id: string, data: Partial<Category>) => {
     try {
       const response = await fetch(`/api/categories/${id}`, {
         method: 'PUT',
@@ -130,7 +141,7 @@ export default function AdminDashboard({ children }: AdminDashboardProps) {
     }
   }
 
-  const createCategory = async (data: any) => {
+  const createCategory = async (data: Partial<Category>) => {
     try {
       const response = await fetch('/api/categories', {
         method: 'POST',
@@ -287,7 +298,7 @@ export default function AdminDashboard({ children }: AdminDashboardProps) {
             </div>
             <div className="flex items-center space-x-4">
               <span className="text-sm text-gray-400">
-                Welcome, {session.user.name || session.user.email}
+                Welcome, {session.user?.name || session.user?.email}
               </span>
               <a
                 href="/"
@@ -333,6 +344,13 @@ export default function AdminDashboard({ children }: AdminDashboardProps) {
       </div>
     </div>
   )
+}
+
+interface StatCardProps {
+  title: string
+  value: string | number
+  icon: any
+  color: 'blue' | 'green' | 'purple' | 'orange'
 }
 
 function AdminOverview({ stats }: { stats: any }) {
@@ -404,12 +422,7 @@ function AdminOverview({ stats }: { stats: any }) {
   )
 }
 
-function StatCard({ title, value, icon: Icon, color }: {
-  title: string
-  value: string | number
-  icon: any
-  color: string
-}) {
+function StatCard({ title, value, icon: Icon, color }: StatCardProps) {
   const colorClasses = {
     blue: 'bg-blue-500/20 text-blue-400',
     green: 'bg-green-500/20 text-green-400',
@@ -424,7 +437,7 @@ function StatCard({ title, value, icon: Icon, color }: {
           <p className="text-gray-400 text-sm">{title}</p>
           <p className="text-2xl font-bold text-white">{value}</p>
         </div>
-        <div className={`p-3 rounded-full ${colorClasses[color as keyof typeof colorClasses]}`}>
+        <div className={`p-3 rounded-full ${colorClasses[color]}`}>
           <Icon className="w-6 h-6" />
         </div>
       </div>

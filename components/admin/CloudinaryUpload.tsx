@@ -1,19 +1,33 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useDropzone } from 'react-dropzone'
-import { Upload, X, Check, AlertCircle, Image as ImageIcon } from 'lucide-react'
+import { Upload, X, Check, AlertCircle, Image as ImageIcon, Zap } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { ImageCompressor } from '@/utils/imageCompression'
 
 interface UploadedFile {
   file: File
   preview: string
   uploading: boolean
   uploaded: boolean
+  compressing: boolean
   error?: string
   publicId?: string
   url?: string
+  originalSize?: number
+  compressedSize?: number
+  compressionRatio?: number
+  wasCompressed?: boolean
+}
+
+interface Category {
+  id: string
+  key: string
+  name: string
+  description: string | null
+  isPrivate: boolean
 }
 
 interface CloudinaryUploadProps {
@@ -30,18 +44,120 @@ export default function CloudinaryUpload({
   const [files, setFiles] = useState<UploadedFile[]>([])
   const [uploading, setUploading] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState(category || '')
-  const [categories, setCategories] = useState([]) // Will be populated from API
+  const [categories, setCategories] = useState<Category[]>([])
+  const [loadingCategories, setLoadingCategories] = useState(true)
 
-  const onDrop = useCallback((acceptedFiles: File[]) => {
+  // Fetch categories on mount
+  useEffect(() => {
+    fetchCategories()
+  }, [])
+
+  const fetchCategories = async () => {
+    try {
+      const response = await fetch('/api/categories?includePrivate=true')
+      if (response.ok) {
+        const data = await response.json()
+        setCategories(data.categories || [])
+      } else {
+        console.error('Failed to fetch categories')
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error)
+    } finally {
+      setLoadingCategories(false)
+    }
+  }
+
+  const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const newFiles = acceptedFiles.map(file => ({
       file,
       preview: URL.createObjectURL(file),
       uploading: false,
-      uploaded: false
+      uploaded: false,
+      compressing: false,
+      originalSize: file.size
     }))
     
     setFiles(prev => [...prev, ...newFiles].slice(0, maxFiles))
-  }, [maxFiles])
+
+    // Start compression for large files
+    for (let i = 0; i < newFiles.length; i++) {
+      const fileIndex = files.length + i
+      compressFileIfNeeded(fileIndex, newFiles[i].file)
+    }
+  }, [maxFiles, files.length])
+
+  const compressFileIfNeeded = async (index: number, originalFile: File) => {
+    const fileSizeMB = originalFile.size / (1024 * 1024)
+    
+    // Only compress if file is large and is a supported image type
+    if (fileSizeMB <= 10 || !ImageCompressor.isSupportedImageType(originalFile)) {
+      return
+    }
+
+    // Set compressing state
+    setFiles(prev => {
+      const newFiles = [...prev]
+      if (newFiles[index]) {
+        newFiles[index] = { ...newFiles[index], compressing: true }
+      }
+      return newFiles
+    })
+
+    try {
+      const result = await ImageCompressor.compressIfNeeded(originalFile)
+      
+      if (result.wasCompressed) {
+        // Update file with compressed version
+        setFiles(prev => {
+          const newFiles = [...prev]
+          if (newFiles[index]) {
+            // Revoke old preview URL
+            URL.revokeObjectURL(newFiles[index].preview)
+            
+            newFiles[index] = {
+              ...newFiles[index],
+              file: result.file,
+              preview: URL.createObjectURL(result.file),
+              compressing: false,
+              originalSize: result.originalSize,
+              compressedSize: result.compressedSize,
+              compressionRatio: result.compressionRatio,
+              wasCompressed: true
+            }
+          }
+          return newFiles
+        })
+
+        toast.success(
+          `Compressed ${originalFile.name}: ${ImageCompressor.formatFileSize(result.originalSize)} → ${ImageCompressor.formatFileSize(result.compressedSize)}`
+        )
+      } else {
+        // Just update the compressing state
+        setFiles(prev => {
+          const newFiles = [...prev]
+          if (newFiles[index]) {
+            newFiles[index] = { ...newFiles[index], compressing: false }
+          }
+          return newFiles
+        })
+      }
+    } catch (error) {
+      console.error('Compression error:', error)
+      setFiles(prev => {
+        const newFiles = [...prev]
+        if (newFiles[index]) {
+          newFiles[index] = { 
+            ...newFiles[index], 
+            compressing: false,
+            error: 'Compression failed'
+          }
+        }
+        return newFiles
+      })
+      toast.error(`Failed to compress ${originalFile.name}`)
+    }
+  }
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -64,11 +180,27 @@ export default function CloudinaryUpload({
   const uploadToCloudinary = async (file: File): Promise<any> => {
     const formData = new FormData()
     formData.append('file', file)
-    formData.append('upload_preset', process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'photography')
-    formData.append('folder', `photography/${selectedCategory || 'uncategorized'}`)
+    
+    // Use the correct upload preset from your environment
+    const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET
+    if (!uploadPreset) {
+      throw new Error('Cloudinary upload preset not configured')
+    }
+    
+    formData.append('upload_preset', uploadPreset)
+    
+    // Find the selected category to use its key for the folder
+    const categoryObj = categories.find(cat => cat.id === selectedCategory)
+    const folderName = categoryObj ? categoryObj.key : 'uncategorized'
+    formData.append('folder', `photography/${folderName}`)
+
+    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME
+    if (!cloudName) {
+      throw new Error('Cloudinary cloud name not configured')
+    }
 
     const response = await fetch(
-      `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`,
+      `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
       {
         method: 'POST',
         body: formData,
@@ -76,7 +208,9 @@ export default function CloudinaryUpload({
     )
 
     if (!response.ok) {
-      throw new Error('Upload failed')
+      const errorData = await response.text()
+      console.error('Cloudinary upload error:', errorData)
+      throw new Error(`Upload failed: ${response.status}`)
     }
 
     return response.json()
@@ -90,20 +224,24 @@ export default function CloudinaryUpload({
       },
       body: JSON.stringify({
         images: uploadResults.map(result => ({
+          title: result.original_filename || 'Untitled',
+          description: null,
           publicId: result.public_id,
           url: result.secure_url,
-          originalFilename: result.original_filename,
-          format: result.format,
           width: result.width,
           height: result.height,
+          format: result.format,
           bytes: result.bytes,
           categoryId: selectedCategory,
-          tags: result.tags || []
+          isHeader: false,
+          order: 0
         }))
       })
     })
 
     if (!response.ok) {
+      const errorData = await response.json()
+      console.error('Database save error:', errorData)
       throw new Error('Failed to save to database')
     }
 
@@ -118,6 +256,24 @@ export default function CloudinaryUpload({
 
     if (!selectedCategory) {
       toast.error('Please select a category')
+      return
+    }
+
+    // Check if any files are still compressing
+    const stillCompressing = files.some(file => file.compressing)
+    if (stillCompressing) {
+      toast.error('Please wait for compression to complete')
+      return
+    }
+
+    // Validate environment variables
+    if (!process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME) {
+      toast.error('Cloudinary configuration missing')
+      return
+    }
+
+    if (!process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET) {
+      toast.error('Cloudinary upload preset not configured')
       return
     }
 
@@ -153,13 +309,14 @@ export default function CloudinaryUpload({
 
           toast.success(`Uploaded ${files[i].file.name}`)
         } catch (error) {
+          console.error('Upload error for file:', files[i].file.name, error)
           setFiles(prev => {
             const newFiles = [...prev]
             newFiles[i] = {
               ...newFiles[i],
               uploading: false,
               uploaded: false,
-              error: 'Upload failed'
+              error: error instanceof Error ? error.message : 'Upload failed'
             }
             return newFiles
           })
@@ -175,7 +332,7 @@ export default function CloudinaryUpload({
       }
 
     } catch (error) {
-      console.error('Upload error:', error)
+      console.error('Upload process error:', error)
       toast.error('Upload process failed')
     } finally {
       setUploading(false)
@@ -194,19 +351,40 @@ export default function CloudinaryUpload({
         <label className="block text-sm font-medium text-white mb-2">
           Select Category *
         </label>
-        <select
-          value={selectedCategory}
-          onChange={(e) => setSelectedCategory(e.target.value)}
-          className="form-select"
-          required
-        >
-          <option value="">Choose a category...</option>
-          <option value="wedding">Wedding</option>
-          <option value="portrait">Portrait</option>
-          <option value="corporate">Corporate</option>
-          <option value="family">Family</option>
-          <option value="event">Event</option>
-        </select>
+        {loadingCategories ? (
+          <div className="text-gray-400">Loading categories...</div>
+        ) : (
+          <select
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white focus:border-blue-500 focus:outline-none"
+            required
+          >
+            <option value="">Choose a category...</option>
+            {categories.map((cat) => (
+              <option key={cat.id} value={cat.id}>
+                {cat.name} {cat.isPrivate ? '(Private)' : ''}
+              </option>
+            ))}
+          </select>
+        )}
+        
+        {!loadingCategories && categories.length === 0 && (
+          <p className="text-yellow-400 text-sm mt-2">
+            No categories found. Please create a category first.
+          </p>
+        )}
+      </div>
+
+      {/* Compression Info */}
+      <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-4">
+        <div className="flex items-center space-x-2 mb-2">
+          <Zap className="w-5 h-5 text-blue-400" />
+          <h3 className="text-blue-400 font-medium">Smart Compression</h3>
+        </div>
+        <p className="text-blue-200 text-sm">
+          Files larger than 10MB will be automatically compressed to under 10MB while maintaining quality.
+        </p>
       </div>
 
       {/* Dropzone */}
@@ -280,9 +458,14 @@ export default function CloudinaryUpload({
 
                     {/* Status Indicator */}
                     <div className="absolute bottom-2 right-2">
+                      {file.compressing && (
+                        <div className="bg-yellow-500 text-white rounded-full p-1" title="Compressing...">
+                          <Zap className="w-4 h-4 animate-pulse" />
+                        </div>
+                      )}
                       {file.uploading && (
                         <div className="bg-blue-500 text-white rounded-full p-1">
-                          <div className="w-4 h-4 spinner" />
+                          <div className="w-4 h-4 animate-spin border-2 border-white border-t-transparent rounded-full" />
                         </div>
                       )}
                       {file.uploaded && (
@@ -291,16 +474,43 @@ export default function CloudinaryUpload({
                         </div>
                       )}
                       {file.error && (
-                        <div className="bg-red-500 text-white rounded-full p-1">
+                        <div className="bg-red-500 text-white rounded-full p-1" title={file.error}>
                           <AlertCircle className="w-4 h-4" />
                         </div>
                       )}
                     </div>
+
+                    {/* Compression Badge */}
+                    {file.wasCompressed && (
+                      <div className="absolute top-2 left-2 bg-green-500 text-white rounded px-2 py-1 text-xs">
+                        -{Math.round((1 - 1/file.compressionRatio!) * 100)}%
+                      </div>
+                    )}
                   </div>
                   
-                  <p className="text-xs text-gray-400 mt-1 truncate">
-                    {file.file.name}
-                  </p>
+                  <div className="mt-1">
+                    <p className="text-xs text-gray-400 truncate">
+                      {file.file.name}
+                    </p>
+                    <div className="flex items-center justify-between text-xs text-gray-500">
+                      <span>
+                        {file.compressedSize 
+                          ? ImageCompressor.formatFileSize(file.compressedSize)
+                          : ImageCompressor.formatFileSize(file.file.size)
+                        }
+                      </span>
+                      {file.wasCompressed && (
+                        <span className="text-green-400">
+                          Compressed
+                        </span>
+                      )}
+                    </div>
+                    {file.error && (
+                      <p className="text-xs text-red-400 mt-1 truncate">
+                        {file.error}
+                      </p>
+                    )}
+                  </div>
                 </motion.div>
               ))}
             </div>
@@ -309,20 +519,30 @@ export default function CloudinaryUpload({
             <div className="flex justify-end space-x-4">
               <button
                 onClick={clearAll}
-                className="btn-ghost"
+                className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
                 disabled={uploading}
               >
                 Clear All
               </button>
               <button
                 onClick={handleUpload}
-                disabled={uploading || files.length === 0 || !selectedCategory}
-                className="btn-primary flex items-center space-x-2"
+                disabled={
+                  uploading || 
+                  files.length === 0 || 
+                  !selectedCategory || 
+                  files.some(f => f.compressing)
+                }
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
               >
                 {uploading ? (
                   <>
-                    <div className="w-4 h-4 spinner" />
+                    <div className="w-4 h-4 animate-spin border-2 border-white border-t-transparent rounded-full" />
                     <span>Uploading...</span>
+                  </>
+                ) : files.some(f => f.compressing) ? (
+                  <>
+                    <Zap className="w-4 h-4 animate-pulse" />
+                    <span>Compressing...</span>
                   </>
                 ) : (
                   <>

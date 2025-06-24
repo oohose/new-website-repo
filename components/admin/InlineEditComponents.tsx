@@ -1,148 +1,22 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Edit, Save, X, Trash2, Plus } from 'lucide-react'
-import { useSession } from 'next-auth/react'
+import { Edit2, Trash2, Plus, Check, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-// Inline Edit Button Component
-interface InlineEditButtonProps {
-  onEdit: () => void
-  onDelete?: () => void
-  className?: string
+interface Category {
+  id: string
+  key: string
+  name: string
+  description: string | null
+  isPrivate: boolean
+  parentId?: string | null
+  images: any[]
+  subcategories: any[]
+  _count: { images: number }
 }
 
-export function InlineEditButton({ onEdit, onDelete, className = '' }: InlineEditButtonProps) {
-  const { data: session } = useSession()
-  
-  if (!session || session.user?.role !== 'ADMIN') {
-    return null
-  }
-
-  return (
-    <div className={`inline-edit-buttons ${className}`}>
-      <button
-        onClick={onEdit}
-        className="inline-edit-btn edit"
-        title="Edit"
-      >
-        <Edit className="w-4 h-4" />
-      </button>
-      {onDelete && (
-        <button
-          onClick={onDelete}
-          className="inline-edit-btn delete"
-          title="Delete"
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
-      )}
-    </div>
-  )
-}
-
-// Inline Text Editor
-interface InlineTextEditorProps {
-  initialValue: string
-  onSave: (value: string) => Promise<void>
-  onCancel: () => void
-  multiline?: boolean
-  placeholder?: string
-}
-
-export function InlineTextEditor({ 
-  initialValue, 
-  onSave, 
-  onCancel, 
-  multiline = false,
-  placeholder = 'Enter text...'
-}: InlineTextEditorProps) {
-  const [value, setValue] = useState(initialValue)
-  const [saving, setSaving] = useState(false)
-
-  const handleSave = async () => {
-    if (value.trim() === '') {
-      toast.error('Value cannot be empty')
-      return
-    }
-
-    setSaving(true)
-    try {
-      await onSave(value.trim())
-      toast.success('Saved successfully')
-    } catch (error) {
-      toast.error('Failed to save')
-      console.error('Save error:', error)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !multiline && !e.shiftKey) {
-      e.preventDefault()
-      handleSave()
-    }
-    if (e.key === 'Escape') {
-      onCancel()
-    }
-  }
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.95 }}
-      className="inline-edit-form"
-    >
-      {multiline ? (
-        <textarea
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={handleKeyPress}
-          placeholder={placeholder}
-          className="inline-edit-input multiline"
-          rows={3}
-          autoFocus
-        />
-      ) : (
-        <input
-          type="text"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={handleKeyPress}
-          placeholder={placeholder}
-          className="inline-edit-input"
-          autoFocus
-        />
-      )}
-      
-      <div className="inline-edit-actions">
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="inline-edit-btn save"
-        >
-          {saving ? (
-            <div className="w-4 h-4 spinner" />
-          ) : (
-            <Save className="w-4 h-4" />
-          )}
-        </button>
-        <button
-          onClick={onCancel}
-          disabled={saving}
-          className="inline-edit-btn cancel"
-        >
-          <X className="w-4 h-4" />
-        </button>
-      </div>
-    </motion.div>
-  )
-}
-
-// Editable Text Component
 interface EditableTextProps {
   value: string
   onSave: (value: string) => Promise<void>
@@ -150,107 +24,167 @@ interface EditableTextProps {
   multiline?: boolean
   placeholder?: string
   className?: string
-  children?: React.ReactNode
+  children: React.ReactNode
 }
 
 export function EditableText({ 
   value, 
   onSave, 
-  onDelete,
-  multiline = false,
-  placeholder,
-  className = '',
-  children
+  onDelete, 
+  multiline = false, 
+  placeholder = "Enter text...",
+  className = "",
+  children 
 }: EditableTextProps) {
   const [isEditing, setIsEditing] = useState(false)
-  const { data: session } = useSession()
+  const [editValue, setEditValue] = useState(value)
+  const [isLoading, setIsLoading] = useState(false)
+  const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null)
 
-  const handleSave = async (newValue: string) => {
-    await onSave(newValue)
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus()
+      inputRef.current.select()
+    }
+  }, [isEditing])
+
+  const handleSave = async () => {
+    if (editValue.trim() === value) {
+      setIsEditing(false)
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      await onSave(editValue.trim())
+      setIsEditing(false)
+      toast.success('Updated successfully!')
+    } catch (error) {
+      toast.error('Failed to update')
+      setEditValue(value) // Reset on error
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleCancel = () => {
+    setEditValue(value)
     setIsEditing(false)
   }
 
   const handleDelete = async () => {
-    if (onDelete && confirm('Are you sure you want to delete this?')) {
-      try {
-        await onDelete()
-        toast.success('Deleted successfully')
-      } catch (error) {
-        toast.error('Failed to delete')
-        console.error('Delete error:', error)
-      }
+    if (!onDelete || !confirm('Are you sure you want to delete this?')) return
+
+    setIsLoading(true)
+    try {
+      await onDelete()
+      toast.success('Deleted successfully!')
+    } catch (error) {
+      toast.error('Failed to delete')
+    } finally {
+      setIsLoading(false)
     }
   }
 
-  const isAdmin = session?.user?.role === 'ADMIN'
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !multiline) {
+      e.preventDefault()
+      handleSave()
+    } else if (e.key === 'Escape') {
+      handleCancel()
+    }
+  }
 
-  return (
-    <div className={`editable-text-container ${className}`}>
-      <AnimatePresence mode="wait">
-        {isEditing ? (
-          <InlineTextEditor
-            key="editor"
-            initialValue={value}
-            onSave={handleSave}
-            onCancel={() => setIsEditing(false)}
-            multiline={multiline}
+  if (isEditing) {
+    return (
+      <div className={`space-y-2 ${className}`}>
+        {multiline ? (
+          <textarea
+            ref={inputRef as React.RefObject<HTMLTextAreaElement>}
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onKeyDown={handleKeyDown}
             placeholder={placeholder}
+            disabled={isLoading}
+            className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none resize-none"
+            rows={3}
           />
         ) : (
-          <motion.div
-            key="display"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="editable-text-display"
-          >
-            {children || (
-              <span className={value ? '' : 'text-gray-400 italic'}>
-                {value || placeholder || 'Click to edit...'}
-              </span>
-            )}
-            
-            {isAdmin && (
-              <InlineEditButton
-                onEdit={() => setIsEditing(true)}
-                onDelete={onDelete ? handleDelete : undefined}
-                className="editable-text-buttons"
-              />
-            )}
-          </motion.div>
+          <input
+            ref={inputRef as React.RefObject<HTMLInputElement>}
+            type="text"
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={placeholder}
+            disabled={isLoading}
+            className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none"
+          />
         )}
-      </AnimatePresence>
+        
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={handleSave}
+            disabled={isLoading}
+            className="flex items-center space-x-1 px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700 disabled:opacity-50"
+          >
+            <Check className="w-3 h-3" />
+            <span>Save</span>
+          </button>
+          <button
+            onClick={handleCancel}
+            disabled={isLoading}
+            className="flex items-center space-x-1 px-3 py-1 bg-gray-600 text-white rounded text-sm hover:bg-gray-700"
+          >
+            <X className="w-3 h-3" />
+            <span>Cancel</span>
+          </button>
+          {onDelete && (
+            <button
+              onClick={handleDelete}
+              disabled={isLoading}
+              className="flex items-center space-x-1 px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700 disabled:opacity-50"
+            >
+              <Trash2 className="w-3 h-3" />
+              <span>Delete</span>
+            </button>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className={`group relative ${className}`}>
+      {children}
+      <div className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          onClick={() => setIsEditing(true)}
+          className="p-1 bg-black/60 rounded text-white/80 hover:text-white"
+        >
+          <Edit2 className="w-3 h-3" />
+        </button>
+      </div>
     </div>
   )
-}
-
-// Category Manager Component
-interface Category {
-  id: string
-  name: string
-  description?: string
-  isPrivate: boolean
 }
 
 interface CategoryManagerProps {
   categories: Category[]
   onUpdate: (id: string, data: Partial<Category>) => Promise<void>
   onDelete: (id: string) => Promise<void>
-  onCreate: (data: Omit<Category, 'id'>) => Promise<void>
+  onCreate: (data: Partial<Category>) => Promise<void>
 }
 
-export function CategoryManager({ 
-  categories, 
-  onUpdate, 
-  onDelete, 
-  onCreate 
-}: CategoryManagerProps) {
-  const [isCreating, setIsCreating] = useState(false)
+export function CategoryManager({ categories, onUpdate, onDelete, onCreate }: CategoryManagerProps) {
+  const [showCreateForm, setShowCreateForm] = useState(false)
   const [newCategory, setNewCategory] = useState({
     name: '',
+    key: '',
     description: '',
     isPrivate: false
   })
+  const [isLoading, setIsLoading] = useState(false)
 
   const handleCreate = async () => {
     if (!newCategory.name.trim()) {
@@ -258,41 +192,53 @@ export function CategoryManager({
       return
     }
 
+    setIsLoading(true)
     try {
-      await onCreate(newCategory)
-      setNewCategory({ name: '', description: '', isPrivate: false })
-      setIsCreating(false)
-      toast.success('Category created successfully')
+      const key = newCategory.key.trim() || newCategory.name.toLowerCase().replace(/\s+/g, '-')
+      
+      await onCreate({
+        name: newCategory.name.trim(),
+        key,
+        description: newCategory.description.trim() || null,
+        isPrivate: newCategory.isPrivate
+      })
+      
+      // Reset form
+      setNewCategory({ name: '', key: '', description: '', isPrivate: false })
+      setShowCreateForm(false)
+      toast.success('Category created successfully!')
     } catch (error) {
       toast.error('Failed to create category')
-      console.error('Create error:', error)
+    } finally {
+      setIsLoading(false)
     }
   }
 
   return (
-    <div className="space-y-4">
+    <div className="bg-gray-800 rounded-lg p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="text-xl font-semibold text-white">Categories</h3>
+        <h3 className="text-xl font-semibold text-white">Category Manager</h3>
         <button
-          onClick={() => setIsCreating(true)}
-          className="btn-primary flex items-center space-x-2"
+          onClick={() => setShowCreateForm(!showCreateForm)}
+          className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
         >
           <Plus className="w-4 h-4" />
           <span>Add Category</span>
         </button>
       </div>
 
-      {/* Create New Category Form */}
+      {/* Create Form */}
       <AnimatePresence>
-        {isCreating && (
+        {showCreateForm && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="bg-gray-800 rounded-lg p-4"
+            className="bg-gray-700 rounded p-4 space-y-4"
           >
-            <h4 className="text-lg font-medium text-white mb-4">Create New Category</h4>
-            <div className="space-y-4">
+            <h4 className="font-medium text-white">Create New Category</h4>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-white mb-2">
                   Category Name *
@@ -301,186 +247,160 @@ export function CategoryManager({
                   type="text"
                   value={newCategory.name}
                   onChange={(e) => setNewCategory(prev => ({ ...prev, name: e.target.value }))}
-                  className="form-input"
                   placeholder="e.g., Wedding Photography"
+                  className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none"
                 />
               </div>
               
               <div>
                 <label className="block text-sm font-medium text-white mb-2">
-                  Description
+                  URL Key (optional)
                 </label>
-                <textarea
-                  value={newCategory.description}
-                  onChange={(e) => setNewCategory(prev => ({ ...prev, description: e.target.value }))}
-                  className="form-textarea"
-                  rows={3}
-                  placeholder="Brief description of this category..."
-                />
-              </div>
-
-              <div className="flex items-center space-x-2">
                 <input
-                  type="checkbox"
-                  id="isPrivate"
-                  checked={newCategory.isPrivate}
-                  onChange={(e) => setNewCategory(prev => ({ ...prev, isPrivate: e.target.checked }))}
-                  className="form-checkbox"
+                  type="text"
+                  value={newCategory.key}
+                  onChange={(e) => setNewCategory(prev => ({ ...prev, key: e.target.value }))}
+                  placeholder="wedding-photography"
+                  className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none"
                 />
-                <label htmlFor="isPrivate" className="text-sm text-white">
-                  Private category (hidden from public)
-                </label>
               </div>
-
-              <div className="flex space-x-4">
-                <button
-                  onClick={handleCreate}
-                  className="btn-primary"
-                >
-                  Create Category
-                </button>
-                <button
-                  onClick={() => setIsCreating(false)}
-                  className="btn-ghost"
-                >
-                  Cancel
-                </button>
-              </div>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-white mb-2">
+                Description
+              </label>
+              <textarea
+                value={newCategory.description}
+                onChange={(e) => setNewCategory(prev => ({ ...prev, description: e.target.value }))}
+                placeholder="Describe this category..."
+                rows={3}
+                className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none resize-none"
+              />
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="isPrivate"
+                checked={newCategory.isPrivate}
+                onChange={(e) => setNewCategory(prev => ({ ...prev, isPrivate: e.target.checked }))}
+                className="form-checkbox text-blue-500"
+              />
+              <label htmlFor="isPrivate" className="text-white text-sm">
+                Private category (only visible to admins)
+              </label>
+            </div>
+            
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={handleCreate}
+                disabled={isLoading || !newCategory.name.trim()}
+                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoading ? 'Creating...' : 'Create Category'}
+              </button>
+              <button
+                onClick={() => setShowCreateForm(false)}
+                className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+              >
+                Cancel
+              </button>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Category List */}
+      {/* Categories List */}
       <div className="space-y-4">
-        {categories.map((category) => (
-          <motion.div
-            key={category.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-gray-800 rounded-lg p-4"
-          >
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <EditableText
-                  value={category.name}
-                  onSave={async (value) => await onUpdate(category.id, { name: value })}
-                  onDelete={async () => await onDelete(category.id)}
-                  className="mb-2"
-                >
-                  <h4 className="text-lg font-medium text-white">{category.name}</h4>
-                </EditableText>
-
-                <EditableText
-                  value={category.description || ''}
-                  onSave={async (value) => await onUpdate(category.id, { description: value })}
-                  multiline
-                  placeholder="Add a description..."
-                >
-                  <p className="text-gray-400 text-sm">
-                    {category.description || 'No description'}
-                  </p>
-                </EditableText>
-              </div>
-
-              <div className="flex items-center space-x-4 ml-4">
-                <label className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    checked={category.isPrivate}
-                    onChange={async (e) => await onUpdate(category.id, { isPrivate: e.target.checked })}
-                    className="form-checkbox"
-                  />
-                  <span className="text-sm text-gray-400">Private</span>
-                </label>
-              </div>
-            </div>
-          </motion.div>
-        ))}
+        <h4 className="font-medium text-white">Existing Categories ({categories.length})</h4>
+        
+        {categories.length === 0 ? (
+          <p className="text-gray-400 text-center py-8">
+            No categories yet. Create your first category to get started!
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {categories.map((category) => (
+              <CategoryCard
+                key={category.id}
+                category={category}
+                onUpdate={onUpdate}
+                onDelete={onDelete}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
-// CSS Styles (add to your globals.css)
-export const inlineEditStyles = `
-  .inline-edit-buttons {
-    @apply opacity-0 group-hover:opacity-100 transition-opacity duration-200;
+interface CategoryCardProps {
+  category: Category
+  onUpdate: (id: string, data: Partial<Category>) => Promise<void>
+  onDelete: (id: string) => Promise<void>
+}
+
+function CategoryCard({ category, onUpdate, onDelete }: CategoryCardProps) {
+  const handleUpdate = async (field: string, value: any) => {
+    await onUpdate(category.id, { [field]: value })
   }
 
-  .inline-edit-btn {
-    @apply p-2 rounded-full transition-colors duration-200;
+  const handleDelete = async () => {
+    if (confirm(`Are you sure you want to delete "${category.name}"? This will also delete all photos in this category.`)) {
+      await onDelete(category.id)
+    }
   }
 
-  .inline-edit-btn.edit {
-    @apply bg-blue-500 hover:bg-blue-600 text-white;
-  }
-
-  .inline-edit-btn.delete {
-    @apply bg-red-500 hover:bg-red-600 text-white;
-  }
-
-  .inline-edit-btn.save {
-    @apply bg-green-500 hover:bg-green-600 text-white;
-  }
-
-  .inline-edit-btn.cancel {
-    @apply bg-gray-500 hover:bg-gray-600 text-white;
-  }
-
-  .inline-edit-form {
-    @apply bg-gray-800 border border-gray-600 rounded-lg p-3 space-y-3;
-  }
-
-  .inline-edit-input {
-    @apply w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500;
-  }
-
-  .inline-edit-input.multiline {
-    @apply resize-none;
-  }
-
-  .inline-edit-actions {
-    @apply flex space-x-2;
-  }
-
-  .editable-text-container {
-    @apply group relative;
-  }
-
-  .editable-text-display {
-    @apply relative;
-  }
-
-  .editable-text-buttons {
-    @apply absolute -top-2 -right-2 flex space-x-1;
-  }
-
-  .form-input {
-    @apply w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500;
-  }
-
-  .form-textarea {
-    @apply w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 resize-none;
-  }
-
-  .form-select {
-    @apply w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500;
-  }
-
-  .form-checkbox {
-    @apply bg-gray-700 border border-gray-600 rounded text-blue-500 focus:ring-blue-500 focus:ring-2;
-  }
-
-  .btn-primary {
-    @apply bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded font-medium transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
-  }
-
-  .btn-ghost {
-    @apply border border-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded font-medium transition-colors duration-200;
-  }
-
-  .spinner {
-    @apply animate-spin rounded-full border-2 border-gray-300 border-t-blue-500;
-  }
-`
+  return (
+    <div className="bg-gray-600 rounded p-4 space-y-3">
+      <div className="flex items-start justify-between">
+        <EditableText
+          value={category.name}
+          onSave={async (value) => await handleUpdate('name', value)}
+        >
+          <h5 className="font-medium text-white">{category.name}</h5>
+        </EditableText>
+        
+        <button
+          onClick={handleDelete}
+          className="text-red-400 hover:text-red-300 p-1"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </div>
+      
+      <EditableText
+        value={category.description || ''}
+        onSave={async (value) => await handleUpdate('description', value)}
+        multiline
+        placeholder="Add a description..."
+      >
+        <p className="text-gray-300 text-sm">
+          {category.description || 'No description'}
+        </p>
+      </EditableText>
+      
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-gray-400">
+          {category._count?.images || 0} photos
+        </span>
+        
+        <label className="flex items-center space-x-2">
+          <input
+            type="checkbox"
+            checked={category.isPrivate}
+            onChange={async (e) => await handleUpdate('isPrivate', e.target.checked)}
+            className="form-checkbox text-blue-500"
+          />
+          <span className="text-gray-300">Private</span>
+        </label>
+      </div>
+      
+      <div className="text-xs text-gray-500">
+        URL: /gallery/{category.key}
+      </div>
+    </div>
+  )
+}
