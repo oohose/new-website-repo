@@ -220,3 +220,110 @@
     display: none !important;
   }
 }
+
+/* Admin Styles */
+.inline-edit-buttons {
+  @apply opacity-0 transition-opacity duration-200;
+}
+
+.group:hover .inline-edit-buttons {
+  @apply opacity-100;
+}
+
+.inline-edit-btn {
+  @apply p-2 rounded-full transition-colors duration-200;
+}
+
+.inline-edit-btn.edit {
+  @apply bg-blue-500 hover:bg-blue-600 text-white;
+}
+
+.inline-edit-btn.delete {
+  @apply bg-red-500 hover:bg-red-600 text-white;
+}
+
+.inline-edit-btn.save {
+  @apply bg-green-500 hover:bg-green-600 text-white;
+}
+
+.inline-edit-btn.cancel {
+  @apply bg-gray-500 hover:bg-gray-600 text-white;
+}
+
+.inline-edit-form {
+  @apply bg-gray-800 border border-gray-600 rounded-lg p-3 space-y-3;
+}
+
+.inline-edit-input {
+  @apply w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500;
+}
+
+.inline-edit-input.multiline {
+  @apply resize-none;
+}
+
+.inline-edit-actions {
+  @apply flex space-x-2;
+}
+
+.editable-text-container {
+  @apply relative;
+}
+
+.editable-text-container {
+  position: relative;
+}
+
+.editable-text-container:hover .editable-text-buttons {
+  opacity: 1;
+}
+
+.editable-text-display {
+  @apply relative;
+}
+
+.editable-text-buttons {
+  @apply absolute flex space-x-1 opacity-0 transition-opacity duration-200;
+  top: -0.5rem;
+  right: -0.5rem;
+}
+
+.form-input {
+  @apply w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500;
+}
+
+.form-textarea {
+  @apply w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 resize-none;
+}
+
+.form-select {
+  @apply w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500;
+}
+
+.form-checkbox {
+  @apply bg-gray-700 border border-gray-600 rounded text-blue-500 focus:ring-blue-500 focus:ring-2;
+}
+
+.btn-primary {
+  @apply bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded font-medium transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.btn-ghost {
+  @apply border border-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded font-medium transition-colors duration-200;
+}
+
+.spinner {
+  @apply animate-spin rounded-full border-2 border-gray-300 border-t-blue-500;
+}
+
+.gallery-grid {
+  @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8;
+}
+
+.category-card {
+  @apply relative overflow-hidden rounded-xl bg-gray-800 transition-all duration-300 cursor-pointer;
+}
+
+.category-card:hover {
+  @apply transform scale-105;
+}

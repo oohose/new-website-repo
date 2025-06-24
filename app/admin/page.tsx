@@ -1,27 +1,37 @@
-import { redirect } from 'next/navigation'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import { getCategories, getAllImages } from '@/lib/db'
+'use client'
+
+import { Suspense } from 'react'
 import AdminDashboard from '@/components/admin/AdminDashboard'
+import CloudinaryUpload from '@/components/admin/CloudinaryUpload'
 
-export default async function AdminPage() {
-  const session = await getServerSession(authOptions)
+export default function AdminPage() {
+  return (
+    <AdminDashboard>
+      <Suspense fallback={<div className="text-white">Loading...</div>}>
+        <AdminContent />
+      </Suspense>
+    </AdminDashboard>
+  )
+}
 
-  if (!session || session.user.role !== 'ADMIN') {
-    redirect('/admin/login')
+function AdminContent() {
+  const handleUploadComplete = (results: any[]) => {
+    console.log('Upload complete:', results)
+    // Optionally refresh the page or update state
+    window.location.reload()
   }
 
-  // Fetch admin data (including private categories)
-  const [categories, allImages] = await Promise.all([
-    getCategories(true), // Include private categories
-    getAllImages(true)   // Include images from private categories
-  ])
-
   return (
-    <AdminDashboard
-      categories={categories}
-      images={allImages}
-      user={session.user}
-    />
+    <div className="space-y-8">
+      <div>
+        <h2 className="text-3xl font-bold text-white mb-2">Upload Photos</h2>
+        <p className="text-gray-400 mb-8">Add new photos to your portfolio</p>
+        
+        <CloudinaryUpload
+          maxFiles={20}
+          onUploadComplete={handleUploadComplete}
+        />
+      </div>
+    </div>
   )
 }

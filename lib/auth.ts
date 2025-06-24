@@ -80,7 +80,7 @@ export const authOptions: NextAuthOptions = {
     strategy: 'jwt'
   },
   pages: {
-    signIn: '/admin/login'
+    signIn: '/admin/signin'
   }
 }
 
