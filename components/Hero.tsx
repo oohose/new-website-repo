@@ -2,6 +2,7 @@
 
 import { motion } from 'framer-motion'
 import { ChevronDown } from 'lucide-react'
+import { siteConfig } from '@/config/site'
 
 export default function Hero() {
   const handleScrollToPortfolio = () => {
@@ -14,11 +15,7 @@ export default function Hero() {
   return (
     <section id="home" className="relative h-screen flex items-center justify-center overflow-hidden">
       {/* Background Gradient */}
-      <div className="absolute inset-0 hero-gradient" />
-
-      <div className="bg-blue-500 text-white p-4 rounded">
-  TEST: This should be blue with white text
-</div>
+      <div className={`absolute inset-0 ${siteConfig.theme.gradients.hero}`} />
       
       {/* Animated Background Pattern */}
       <div className="absolute inset-0 opacity-30">
@@ -35,7 +32,7 @@ export default function Hero() {
           transition={{ duration: 0.8, ease: "easeOut" }}
           className="text-4xl md:text-6xl lg:text-7xl font-light text-white mb-6 tracking-wide text-shadow-lg"
         >
-          Capturing Moments
+          {siteConfig.content.hero.title}
         </motion.h1>
         
         <motion.p
@@ -44,7 +41,7 @@ export default function Hero() {
           transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
           className="text-lg md:text-xl lg:text-2xl text-white/90 mb-10 text-shadow tracking-wide"
         >
-          Professional Photography That Tells Your Story
+          {siteConfig.content.hero.subtitle}
         </motion.p>
         
         <motion.button
@@ -54,7 +51,7 @@ export default function Hero() {
           onClick={handleScrollToPortfolio}
           className="group relative px-8 py-4 bg-gradient-to-r from-primary-500 to-secondary-500 text-white font-semibold text-lg rounded-full transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 text-shadow"
         >
-          <span className="relative z-10">View My Work</span>
+          <span className="relative z-10">{siteConfig.content.hero.cta}</span>
           <div className="absolute inset-0 bg-gradient-to-r from-primary-600 to-secondary-600 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
         </motion.button>
       </div>

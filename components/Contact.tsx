@@ -3,7 +3,7 @@
 import { motion } from 'framer-motion'
 import { useState } from 'react'
 import { Mail, Phone, MapPin, Send, Instagram, Facebook, Twitter } from 'lucide-react'
-import { siteConfig } from '@/lib/utils'
+import { siteConfig } from '@/config/site'
 import toast from 'react-hot-toast'
 
 export default function Contact() {
@@ -24,7 +24,7 @@ export default function Contact() {
       // In a real application, you would send this to your API
       await new Promise(resolve => setTimeout(resolve, 1000)) // Simulate API call
       
-      toast.success('Message sent successfully! I\'ll get back to you soon.')
+      toast.success(siteConfig.contact.formMessages.success)
       setFormData({
         name: '',
         email: '',
@@ -33,7 +33,7 @@ export default function Contact() {
         eventDate: '',
       })
     } catch (error) {
-      toast.error('Failed to send message. Please try again.')
+      toast.error(siteConfig.contact.formMessages.error)
     } finally {
       setIsSubmitting(false)
     }
@@ -68,7 +68,7 @@ export default function Contact() {
   ].filter(link => link.href) // Only show links that are configured
 
   return (
-    <section id="contact" className="py-20 lg:py-32 bg-gradient-to-b from-black to-gray-900">
+    <section id="contact" className={`py-20 lg:py-32 ${siteConfig.theme.gradients.contact}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <motion.div
@@ -79,10 +79,10 @@ export default function Contact() {
           className="text-center mb-16 lg:mb-24"
         >
           <h2 className="text-3xl md:text-4xl lg:text-5xl font-light text-white mb-6 gradient-text">
-            Let's Create Something Beautiful
+            {siteConfig.content.contact.title}
           </h2>
           <p className="text-lg text-white/70 max-w-2xl mx-auto">
-            Ready to capture your special moments? Get in touch and let's discuss your vision.
+            {siteConfig.content.contact.subtitle}
           </p>
         </motion.div>
 
@@ -96,7 +96,7 @@ export default function Contact() {
             className="space-y-8"
           >
             <div>
-              <h3 className="text-2xl font-semibold text-white mb-6">Get in Touch</h3>
+              <h3 className="text-2xl font-semibold text-white mb-6">{siteConfig.content.contact.infoTitle}</h3>
               <div className="space-y-6">
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
@@ -166,7 +166,7 @@ export default function Contact() {
                 transition={{ duration: 0.6, delay: 0.4 }}
                 viewport={{ once: true }}
               >
-                <h4 className="text-xl font-semibold text-white mb-4">Follow My Work</h4>
+                <h4 className="text-xl font-semibold text-white mb-4">{siteConfig.content.contact.socialTitle}</h4>
                 <div className="flex space-x-4">
                   {socialLinks.map((social) => (
                     <a
@@ -237,12 +237,11 @@ export default function Contact() {
                     onChange={handleChange}
                     className="form-select"
                   >
-                    <option value="">Select event type</option>
-                    <option value="wedding">Wedding</option>
-                    <option value="portrait">Portrait Session</option>
-                    <option value="corporate">Corporate Event</option>
-                    <option value="family">Family Photos</option>
-                    <option value="other">Other</option>
+                    {siteConfig.contact.eventTypes.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div>
@@ -286,12 +285,12 @@ export default function Contact() {
                 {isSubmitting ? (
                   <>
                     <div className="w-5 h-5 spinner" />
-                    <span>Sending...</span>
+                    <span>{siteConfig.contact.formMessages.sending}</span>
                   </>
                 ) : (
                   <>
                     <Send className="w-5 h-5" />
-                    <span>Send Message</span>
+                    <span>{siteConfig.contact.formMessages.send}</span>
                   </>
                 )}
               </motion.button>

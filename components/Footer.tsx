@@ -3,11 +3,9 @@
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { Heart, Camera } from 'lucide-react'
-import { siteConfig } from '@/lib/utils'
+import { siteConfig } from '@/config/site'
 
 export default function Footer() {
-  const currentYear = new Date().getFullYear()
-
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -38,8 +36,7 @@ export default function Footer() {
               {siteConfig.photographer.name.toUpperCase()}
             </button>
             <p className="text-white/60 text-sm leading-relaxed">
-              Professional photography services capturing life's most precious moments 
-              with artistic vision and technical excellence.
+              {siteConfig.description}
             </p>
             <div className="flex items-center space-x-1 text-white/40 text-sm">
               <span>Made with</span>
@@ -59,18 +56,13 @@ export default function Footer() {
           >
             <h3 className="text-lg font-semibold text-white">Quick Links</h3>
             <nav className="space-y-2">
-              {[
-                { label: 'Home', id: 'home' },
-                { label: 'Portfolio', id: 'portfolio' },
-                { label: 'About', id: 'about' },
-                { label: 'Contact', id: 'contact' },
-              ].map((link) => (
+              {siteConfig.navigation.main.map((link) => (
                 <button
-                  key={link.id}
-                  onClick={() => scrollToSection(link.id)}
+                  key={link.name}
+                  onClick={() => scrollToSection(link.href.replace('#', ''))}
                   className="block text-white/60 hover:text-white transition-colors text-sm"
                 >
-                  {link.label}
+                  {link.name}
                 </button>
               ))}
               <Link
@@ -130,22 +122,19 @@ export default function Footer() {
           className="mt-12 pt-8 border-t border-white/10 flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0"
         >
           <p className="text-white/40 text-sm">
-            © {currentYear} {siteConfig.photographer.name}. All rights reserved.
+            {siteConfig.footer.copyright}
           </p>
           
           <div className="flex items-center space-x-6 text-sm text-white/40">
-            <Link 
-              href="/privacy" 
-              className="hover:text-white transition-colors"
-            >
-              Privacy Policy
-            </Link>
-            <Link 
-              href="/terms" 
-              className="hover:text-white transition-colors"
-            >
-              Terms of Service
-            </Link>
+            {siteConfig.navigation.footer.map((link) => (
+              <Link 
+                key={link.name}
+                href={link.href} 
+                className="hover:text-white transition-colors"
+              >
+                {link.name}
+              </Link>
+            ))}
             <button
               onClick={scrollToTop}
               className="hover:text-white transition-colors"

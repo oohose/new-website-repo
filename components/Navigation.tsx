@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useSession, signIn, signOut } from 'next-auth/react'
 import { Menu, X, User, LogOut } from 'lucide-react'
-import { siteConfig } from '@/lib/utils'
+import { siteConfig } from '@/config/site'
 
 export default function Navigation() {
   const [isScrolled, setIsScrolled] = useState(false)
@@ -49,34 +49,16 @@ export default function Navigation() {
 
           {/* Desktop Navigation */}
           <div className="hidden lg:flex items-center space-x-8">
-            <Link
-              href="#home"
-              onClick={(e) => handleSmoothScroll(e, '#home')}
-              className="text-white hover:text-primary-400 transition-colors font-medium"
-            >
-              Home
-            </Link>
-            <Link
-              href="#portfolio"
-              onClick={(e) => handleSmoothScroll(e, '#portfolio')}
-              className="text-white hover:text-primary-400 transition-colors font-medium"
-            >
-              Portfolio
-            </Link>
-            <Link
-              href="#about"
-              onClick={(e) => handleSmoothScroll(e, '#about')}
-              className="text-white hover:text-primary-400 transition-colors font-medium"
-            >
-              About
-            </Link>
-            <Link
-              href="#contact"
-              onClick={(e) => handleSmoothScroll(e, '#contact')}
-              className="text-white hover:text-primary-400 transition-colors font-medium"
-            >
-              Contact
-            </Link>
+            {siteConfig.navigation.main.map((item) => (
+              <Link
+                key={item.name}
+                href={item.href}
+                onClick={(e) => handleSmoothScroll(e, item.href)}
+                className="text-white hover:text-primary-400 transition-colors font-medium"
+              >
+                {item.name}
+              </Link>
+            ))}
             
             {/* Admin Section */}
             {isAdmin && (
@@ -134,34 +116,16 @@ export default function Navigation() {
         {isMobileMenuOpen && (
           <div className="lg:hidden">
             <div className="px-2 pt-2 pb-3 space-y-1 bg-black/95 backdrop-blur-lg rounded-lg mt-2">
-              <Link
-                href="#home"
-                onClick={(e) => handleSmoothScroll(e, '#home')}
-                className="block px-3 py-2 text-white hover:text-primary-400 transition-colors font-medium"
-              >
-                Home
-              </Link>
-              <Link
-                href="#portfolio"
-                onClick={(e) => handleSmoothScroll(e, '#portfolio')}
-                className="block px-3 py-2 text-white hover:text-primary-400 transition-colors font-medium"
-              >
-                Portfolio
-              </Link>
-              <Link
-                href="#about"
-                onClick={(e) => handleSmoothScroll(e, '#about')}
-                className="block px-3 py-2 text-white hover:text-primary-400 transition-colors font-medium"
-              >
-                About
-              </Link>
-              <Link
-                href="#contact"
-                onClick={(e) => handleSmoothScroll(e, '#contact')}
-                className="block px-3 py-2 text-white hover:text-primary-400 transition-colors font-medium"
-              >
-                Contact
-              </Link>
+              {siteConfig.navigation.main.map((item) => (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  onClick={(e) => handleSmoothScroll(e, item.href)}
+                  className="block px-3 py-2 text-white hover:text-primary-400 transition-colors font-medium"
+                >
+                  {item.name}
+                </Link>
+              ))}
               
               {isAdmin && (
                 <Link

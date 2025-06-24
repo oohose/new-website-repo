@@ -3,7 +3,7 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import { Providers } from '@/app/providers'
 import { Toaster } from 'react-hot-toast'
-import { siteConfig } from '@/lib/utils'
+import { siteConfig } from '@/config/site'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -12,8 +12,8 @@ export const metadata: Metadata = {
     default: siteConfig.name,
     template: `%s | ${siteConfig.name}`
   },
-  description: `Professional photography services by ${siteConfig.photographer.name}. Specializing in weddings, portraits, and events in ${siteConfig.photographer.location}.`,
-  keywords: ['photography', 'wedding', 'portrait', 'event', 'houston', 'texas'],
+  description: siteConfig.description,
+  keywords: siteConfig.seo.keywords,
   authors: [{ name: siteConfig.photographer.name }],
   creator: siteConfig.photographer.name,
   openGraph: {
@@ -21,14 +21,8 @@ export const metadata: Metadata = {
     locale: 'en_US',
     url: process.env.NEXTAUTH_URL,
     title: siteConfig.name,
-    description: `Professional photography services by ${siteConfig.photographer.name}`,
+    description: siteConfig.description,
     siteName: siteConfig.name,
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: siteConfig.name,
-    description: `Professional photography services by ${siteConfig.photographer.name}`,
-    creator: '@your_twitter_handle', // Update with actual Twitter handle
   },
   robots: {
     index: true,
@@ -49,7 +43,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" className={siteConfig.theme.darkMode ? "dark" : ""}>
       <body className={inter.className}>
         <Providers>
           {children}

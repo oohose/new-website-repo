@@ -3,7 +3,7 @@
 import { motion } from 'framer-motion'
 import Image from 'next/image'
 import { useState, useEffect } from 'react'
-import { siteConfig } from '@/lib/utils'
+import { siteConfig } from '@/config/site'
 
 export default function About() {
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
@@ -45,7 +45,7 @@ export default function About() {
             className="space-y-6"
           >
             <h2 className="text-3xl md:text-4xl lg:text-5xl font-light text-white gradient-text">
-              About Me
+              About {siteConfig.photographer.name.split(' ')[0]}
             </h2>
             
             <div className="space-y-6 text-lg text-white/80 leading-relaxed">
@@ -55,9 +55,7 @@ export default function About() {
                 transition={{ duration: 0.6, delay: 0.2 }}
                 viewport={{ once: true }}
               >
-                With over 4 years of experience in professional photography, I specialize in 
-                capturing the essence of every moment. My passion lies in creating visual stories 
-                that resonate with emotion and authenticity.
+                {siteConfig.photographer.bio}
               </motion.p>
               
               <motion.p
@@ -66,9 +64,7 @@ export default function About() {
                 transition={{ duration: 0.6, delay: 0.4 }}
                 viewport={{ once: true }}
               >
-                From intimate weddings to corporate events, I bring a unique perspective to every 
-                shoot. My approach combines technical expertise with artistic vision to deliver 
-                images that exceed expectations.
+                {siteConfig.content.about.content}
               </motion.p>
               
               <motion.p
@@ -178,23 +174,7 @@ export default function About() {
           </h3>
           
           <div className="grid md:grid-cols-3 gap-8">
-            {[
-              {
-                title: 'Wedding Photography',
-                description: 'Capturing your special day with artistic elegance and emotional depth.',
-                icon: '💍'
-              },
-              {
-                title: 'Portrait Sessions',
-                description: 'Professional headshots and personal portraits that tell your story.',
-                icon: '👤'
-              },
-              {
-                title: 'Event Photography',
-                description: 'Corporate events, parties, and celebrations documented beautifully.',
-                icon: '🎉'
-              }
-            ].map((service, index) => (
+            {siteConfig.services.filter(service => service.featured).map((service, index) => (
               <motion.div
                 key={service.title}
                 initial={{ opacity: 0, y: 20 }}
