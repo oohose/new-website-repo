@@ -1,8 +1,8 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import Image from 'next/image'
-import { useState, useEffect } from 'react'
+import NextImage from 'next/image'
+import { useState, useEffect, useCallback } from 'react'
 import { siteConfig } from '@/config/site'
 
 // Client-safe thumbnail function
@@ -21,40 +21,37 @@ interface ImageData {
   url: string
 }
 
+interface ImageDimensions {
+  width: number
+  height: number
+  orientation: 'landscape' | 'portrait' | 'square'
+}
+
 export default function About() {
-  const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [mounted, setMounted] = useState(false)
   const [aboutImages, setAboutImages] = useState<ImageData[]>([])
   const [loading, setLoading] = useState(true)
+  
+  // Simplified state management
+  const [currentImageIndex, setCurrentImageIndex] = useState(0)
+  const [containerDimensions, setContainerDimensions] = useState({ width: 450, height: 450 })
+  const [showImage, setShowImage] = useState(true)
+  const [transitionPhase, setTransitionPhase] = useState<'idle' | 'fadeOut' | 'resize' | 'fadeIn'>('idle')
 
-  // Fetch images from your API
   useEffect(() => {
     setMounted(true)
     fetchImages()
   }, [])
-
-  // Auto-cycle through images
-  useEffect(() => {
-    if (aboutImages.length > 1) {
-      const interval = setInterval(() => {
-        setCurrentImageIndex((prev) => (prev + 1) % aboutImages.length)
-      }, 4000)
-      
-      return () => clearInterval(interval)
-    }
-  }, [aboutImages.length])
 
   const fetchImages = async () => {
     try {
       const response = await fetch('/api/images?public=true')
       if (response.ok) {
         const data = await response.json()
-        // Take a random selection of images for the about section
         const shuffled = data.images.sort(() => 0.5 - Math.random())
-        setAboutImages(shuffled.slice(0, 6)) // Show 6 random images
+        setAboutImages(shuffled.slice(0, 6))
       } else {
         console.error('Failed to fetch images')
-        // Fallback to empty array if API fails
         setAboutImages([])
       }
     } catch (error) {
@@ -65,6 +62,111 @@ export default function About() {
     }
   }
 
+  const detectImageDimensions = useCallback((cloudinaryId: string): Promise<ImageDimensions> => {
+    return new Promise((resolve) => {
+      const img = new window.Image()
+      img.onload = () => {
+        const aspectRatio = img.naturalWidth / img.naturalHeight
+        let orientation: 'landscape' | 'portrait' | 'square'
+        
+        if (aspectRatio > 1.2) {
+          orientation = 'landscape'
+        } else if (aspectRatio < 0.8) {
+          orientation = 'portrait'
+        } else {
+          orientation = 'square'
+        }
+
+        resolve({
+          width: img.naturalWidth,
+          height: img.naturalHeight,
+          orientation
+        })
+      }
+      img.src = `https://res.cloudinary.com/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload/f_auto,q_auto/${cloudinaryId}`
+    })
+  }, [])
+
+  const calculateContainerSize = useCallback((imageDims: ImageDimensions) => {
+    const { width, height, orientation } = imageDims
+    const maxWidth = 500
+    const maxHeight = 600
+    
+    let containerWidth, containerHeight
+    
+    if (orientation === 'landscape') {
+      containerWidth = Math.min(maxWidth, width * (maxHeight / height))
+      containerHeight = Math.min(maxHeight, containerWidth * (height / width))
+    } else if (orientation === 'portrait') {
+      containerHeight = Math.min(maxHeight, height * (maxWidth / width))
+      containerWidth = Math.min(maxWidth, containerHeight * (width / height))
+    } else {
+      const size = Math.min(maxWidth, maxHeight)
+      containerWidth = size
+      containerHeight = size
+    }
+
+    return {
+      width: Math.round(containerWidth),
+      height: Math.round(containerHeight)
+    }
+  }, [])
+
+  const performTransition = useCallback(async () => {
+    if (aboutImages.length <= 1) return
+
+    const nextIndex = (currentImageIndex + 1) % aboutImages.length
+    const nextImage = aboutImages[nextIndex]
+    
+    // Phase 1: Fade out
+    setTransitionPhase('fadeOut')
+    setShowImage(false)
+    
+    // Wait for fade out
+    await new Promise(resolve => setTimeout(resolve, 800))
+    
+    // Phase 2: Detect new image dimensions and resize container
+    setTransitionPhase('resize')
+    const newDimensions = await detectImageDimensions(nextImage.cloudinaryId)
+    const newContainerSize = calculateContainerSize(newDimensions)
+    setContainerDimensions(newContainerSize)
+    
+    // Wait for container resize
+    await new Promise(resolve => setTimeout(resolve, 2000))
+    
+    // Phase 3: Change image and fade in
+    setTransitionPhase('fadeIn')
+    setCurrentImageIndex(nextIndex)
+    
+    // Small delay then fade in
+    await new Promise(resolve => setTimeout(resolve, 100))
+    setShowImage(true)
+    
+    // Wait for fade in to complete
+    await new Promise(resolve => setTimeout(resolve, 800))
+    
+    setTransitionPhase('idle')
+  }, [aboutImages, currentImageIndex, detectImageDimensions, calculateContainerSize])
+
+  // Auto transition
+  useEffect(() => {
+    if (aboutImages.length > 1 && transitionPhase === 'idle') {
+      const timer = setTimeout(performTransition, 8000)
+      return () => clearTimeout(timer)
+    }
+  }, [aboutImages.length, transitionPhase, performTransition])
+
+  // Initialize first image dimensions
+  useEffect(() => {
+    if (aboutImages.length > 0 && transitionPhase === 'idle' && containerDimensions.width === 450) {
+      const firstImage = aboutImages[0]
+      detectImageDimensions(firstImage.cloudinaryId).then(dims => {
+        const size = calculateContainerSize(dims)
+        setContainerDimensions(size)
+      })
+    }
+  }, [aboutImages, transitionPhase, containerDimensions.width, detectImageDimensions, calculateContainerSize])
+
   if (!mounted) {
     return <div className="h-96 bg-gray-800 animate-pulse" />
   }
@@ -72,9 +174,8 @@ export default function About() {
   return (
     <section id="about" className="py-20 lg:py-32 bg-gradient-to-b from-gray-900 to-black">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Flex layout instead of grid to allow dynamic sizing */}
         <div className="flex flex-col lg:flex-row gap-12 lg:gap-20 items-center lg:items-start">
-          {/* Text Content - Fixed width on large screens */}
+          {/* Text Content */}
           <motion.div
             initial={{ opacity: 0, x: -30 }}
             whileInView={{ opacity: 1, x: 0 }}
@@ -139,69 +240,108 @@ export default function About() {
             </motion.div>
           </motion.div>
 
-          {/* Image Section - Completely free-flowing */}
+          {/* Image Section */}
           <motion.div
             initial={{ opacity: 0, x: 30 }}
             whileInView={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.8 }}
             viewport={{ once: true }}
-            className="relative flex justify-center lg:justify-start"
+            className="flex justify-center lg:justify-start"
           >
-            {/* Container that sizes itself to image content */}
-            <div className="relative">
-              <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-primary-500/20 to-secondary-500/20 shadow-2xl p-4">
-                <div className="absolute inset-0 bg-gradient-to-br from-primary-500 to-secondary-500 opacity-20 rounded-2xl" />
-                
-                {/* Images that determine container size */}
-                <div className="relative">
-                  {loading ? (
-                    // Loading state
-                    <div className="w-96 h-96 bg-gray-700 rounded-xl flex items-center justify-center">
-                      <div className="text-center text-white/60">
-                        <div className="text-4xl mb-2 animate-pulse">📸</div>
-                        <div className="text-sm">Loading portfolio...</div>
+            {/* Fixed outer container to prevent layout shifts */}
+            <div className="relative" style={{ width: '520px', height: '620px' }}>
+              <div className="absolute inset-0 flex items-center justify-center">
+                {/* Dynamic container */}
+                <motion.div 
+                  className="relative overflow-hidden bg-gradient-to-br from-primary-500/20 to-secondary-500/20 shadow-2xl"
+                  style={{
+                    borderRadius: '16px', // Explicit border radius
+                    padding: '16px'
+                  }}
+                  animate={{ 
+                    width: containerDimensions.width,
+                    height: containerDimensions.height
+                  }}
+                  transition={{ 
+                    duration: transitionPhase === 'resize' ? 2 : 0,
+                    ease: "easeInOut"
+                  }}
+                >
+                  <div className="absolute inset-0 bg-gradient-to-br from-primary-500 to-secondary-500 opacity-20" style={{ borderRadius: '16px' }} />
+                  
+                  {/* Image container with proper clipping */}
+                  <div 
+                    className="relative w-full h-full overflow-hidden bg-gray-800/20"
+                    style={{ borderRadius: '8px' }} // Inner radius smaller than container
+                  >
+                    {loading ? (
+                      <div className="w-full h-full bg-gray-700 flex items-center justify-center" style={{ borderRadius: '8px' }}>
+                        <div className="text-center text-white/60">
+                          <div className="text-4xl mb-2 animate-pulse">📸</div>
+                          <div className="text-sm">Loading portfolio...</div>
+                        </div>
                       </div>
-                    </div>
-                  ) : aboutImages.length > 0 ? (
-                    // Images with natural dimensions
-                    aboutImages.map((image, index) => (
+                    ) : aboutImages.length > 0 ? (
                       <motion.div
-                        key={image.id}
-                        initial={{ opacity: 0 }}
-                        animate={{ 
-                          opacity: index === currentImageIndex ? 1 : 0,
-                        }}
-                        transition={{ duration: 1.5 }}
-                        className={index === currentImageIndex ? 'block' : 'absolute inset-0 invisible'}
+                        className="absolute inset-0"
+                        style={{ borderRadius: '8px' }}
+                        animate={{ opacity: showImage ? 1 : 0 }}
+                        transition={{ duration: 0.8, ease: "easeInOut" }}
                       >
-                        <Image
-                          src={getClientThumbnailUrl(image.cloudinaryId, 600, 800)}
-                          alt={image.title}
-                          width={600}
-                          height={800}
-                          className="rounded-xl shadow-lg max-w-[90vw] max-h-[70vh] w-auto h-auto"
-                          sizes="(max-width: 768px) 90vw, 600px"
-                          priority={index === 0}
+                        {/* Image with proper clipping mask */}
+                        <div 
+                          className="w-full h-full relative"
+                          style={{
+                            borderRadius: '8px',
+                            overflow: 'hidden',
+                            clipPath: 'inset(0 round 8px)'
+                          }}
+                        >
+                          <NextImage
+                            src={getClientThumbnailUrl(
+                              aboutImages[currentImageIndex].cloudinaryId, 
+                              containerDimensions.width * 2, 
+                              containerDimensions.height * 2
+                            )}
+                            alt={aboutImages[currentImageIndex].title}
+                            fill
+                            className="object-cover"
+                            style={{
+                              borderRadius: '8px'
+                            }}
+                            sizes="(max-width: 768px) 90vw, 600px"
+                          />
+                        </div>
+                        {/* Inner shadow for depth */}
+                        <div 
+                          className="absolute inset-0 pointer-events-none" 
+                          style={{
+                            borderRadius: '8px',
+                            boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.25), inset 0 1px 3px rgba(0,0,0,0.3)',
+                            background: 'linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(0,0,0,0.03) 100%)'
+                          }} 
                         />
-                        {/* Subtle overlay */}
-                        <div className="absolute inset-0 bg-black/5 rounded-xl pointer-events-none" />
                       </motion.div>
-                    ))
-                  ) : (
-                    // Fallback
-                    <div className="w-96 h-96 bg-gray-700 rounded-xl flex items-center justify-center">
-                      <div className="text-center text-white/60">
-                        <div className="text-4xl mb-2">📸</div>
-                        <div className="text-sm">Portfolio Loading...</div>
+                    ) : (
+                      <div className="w-full h-full bg-gray-700 flex items-center justify-center" style={{ borderRadius: '8px' }}>
+                        <div className="text-center text-white/60">
+                          <div className="text-4xl mb-2">📸</div>
+                          <div className="text-sm">Portfolio Loading...</div>
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </div>
+                    )}
+                  </div>
+                </motion.div>
               </div>
 
               {/* Decorative elements */}
               <div className="absolute -top-4 -right-4 w-24 h-24 bg-primary-500/20 rounded-full blur-xl" />
               <div className="absolute -bottom-4 -left-4 w-32 h-32 bg-secondary-500/20 rounded-full blur-xl" />
+              
+              {/* Debug info */}
+              <div className="absolute -bottom-12 left-0 right-0 text-center text-xs text-white/40">
+                Phase: {transitionPhase} | Size: {containerDimensions.width}x{containerDimensions.height}
+              </div>
             </div>
           </motion.div>
         </div>

@@ -1,0 +1,9 @@
+1. currently theres no way to manage my galleries from my admin page, the edit and delete buttons do nothing.
+2. i have no way to delete images on my website and have them be deleted from cloudinary.
+3. new category manager that allows for the creation of subcategories.
+4. deleting categories doesn't work.
+5. need a modal menu instead of an input button for deleting things.
+6. after successful upload it needs to get rid of all queued files.
+7. image display seems to have a hard time displaying new images for the first time.
+8. need functional inline edit modal menus for categories AND images when in admin view
+9. functional email integration for the contact section.
