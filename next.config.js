@@ -1,8 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    appDir: true,
-  },
+  // Remove the experimental appDir flag - it's stable in Next.js 14
   images: {
     domains: [
       'res.cloudinary.com',

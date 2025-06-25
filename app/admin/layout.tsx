@@ -1,10 +1,40 @@
-import '@/app/globals.css'
+import './globals.css'
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import { Providers } from '@/app/providers'
 import { Toaster } from 'react-hot-toast'
 import { siteConfig } from '@/config/site'
-import ModernNavigation from '@/components/Navigation' // ✅ Add this import
+
+// Try multiple import approaches to debug
+// Uncomment ONE at a time to test:
+
+// Option 1: Original import
+// import ModernNavigation from '@/components/Navigation'
+
+// Option 2: Relative path import
+// import ModernNavigation from '../components/Navigation'
+
+// Option 3: Simple inline test component
+function TestNav() {
+  return (
+    <div 
+      className="fixed top-0 left-0 right-0 z-50 bg-red-500 text-white p-4 text-center"
+      style={{ 
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 9999,
+        backgroundColor: 'red',
+        color: 'white',
+        padding: '16px',
+        textAlign: 'center'
+      }}
+    >
+      🚨 LAYOUT IS WORKING - Navigation should appear here! 🚨
+    </div>
+  )
+}
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -43,11 +73,18 @@ export default function RootLayout({
 }: {
   children: React.ReactNode
 }) {
+  console.log('🔍 RootLayout is rendering!') // Debug log
+  
   return (
     <html lang="en" className={siteConfig.theme.darkMode ? "dark" : ""}>
       <body className={inter.className}>
         <Providers>
-          <ModernNavigation /> {/* ✅ Add the navigation here */}
+          {/* Start with inline test component */}
+          <TestNav />
+          
+          {/* Once TestNav works, comment it out and try: */}
+          {/* <ModernNavigation /> */}
+          
           {children}
           <Toaster
             position="top-center"
