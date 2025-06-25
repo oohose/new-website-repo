@@ -4,8 +4,8 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import Image from 'next/image'
-import { ArrowRight } from 'lucide-react'
 import { useSession } from 'next-auth/react'
+import { Category } from '@/lib/types'
 
 // Client-safe thumbnail function (doesn't import server-side Cloudinary)
 function getClientThumbnailUrl(cloudinaryId: string, width: number, height: number): string {
@@ -14,18 +14,6 @@ function getClientThumbnailUrl(cloudinaryId: string, width: number, height: numb
     return '/placeholder-image.jpg'
   }
   return `https://res.cloudinary.com/${cloudName}/image/upload/c_fill,w_${width},h_${height},q_auto,f_auto/${cloudinaryId}`
-}
-
-interface Category {
-  id: string
-  key: string
-  name: string
-  description: string | null
-  isPrivate: boolean
-  parentId?: string | null
-  images: any[]
-  subcategories: any[]
-  _count: { images: number }
 }
 
 interface PortfolioProps {
@@ -43,13 +31,13 @@ export default function ModernPortfolio({ categories, recentImages }: PortfolioP
     setCategoriesList(categories)
   }, [categories])
 
-  const isAdmin = session?.user?.role === 'ADMIN'
+  const isAdmin = (session?.user as any)?.role === 'ADMIN'
 
   if (!mounted) {
     return <div className="h-96 bg-gray-800 animate-pulse" />
   }
 
-  // Filter to only show top-level categories (no parent) and handle admin vs public view
+  // Filter to show private categories to admins
   const topLevelCategories = categoriesList
     .filter(cat => !cat.parentId && (isAdmin || !cat.isPrivate))
 
@@ -77,7 +65,7 @@ export default function ModernPortfolio({ categories, recentImages }: PortfolioP
   }).filter(cat => cat.totalImages > 0)
 
   return (
-    <section className="bg-gray-800 py-12 lg:py-16">
+    <section id="portfolio" className="bg-gray-800 py-12 lg:py-16">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <motion.div

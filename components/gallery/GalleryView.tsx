@@ -1,12 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Image from 'next/image'
 import Link from 'next/link'
 import { ArrowLeft, X, ChevronLeft, ChevronRight } from 'lucide-react'
 
-interface Image {
+interface ImageType {
   id: string
   title: string
   description: string | null
@@ -25,7 +25,7 @@ interface Category {
   name: string
   description: string | null
   isPrivate: boolean
-  images: Image[]
+  images: ImageType[]
   subcategories: any[]
   _count: { images: number }
 }
@@ -36,11 +36,11 @@ interface DarkElegantGalleryViewProps {
 }
 
 export default function DarkElegantGalleryView({ category, isAdmin }: DarkElegantGalleryViewProps) {
-  const [selectedImage, setSelectedImage] = useState<Image | null>(null)
+  const [selectedImage, setSelectedImage] = useState<ImageType | null>(null)
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
 
-  // Helper function to get Cloudinary URL
-  const getOptimizedUrl = (image: Image, width: number, height?: number) => {
+  // FIXED: Simple Cloudinary URL function that doesn't crop
+  const getOptimizedUrl = (image: ImageType, width?: number, forLightbox = false) => {
     if (!image.cloudinaryId) {
       return image.url || '/placeholder-image.jpg'
     }
@@ -50,14 +50,24 @@ export default function DarkElegantGalleryView({ category, isAdmin }: DarkElegan
       return image.url || '/placeholder-image.jpg'
     }
 
-    const heightParam = height ? `,h_${height}` : ''
-    return `https://res.cloudinary.com/${cloudName}/image/upload/c_fit,w_${width}${heightParam},q_auto,f_auto/${image.cloudinaryId}`
+    // For lightbox - optimized size for faster loading
+    if (forLightbox) {
+      return `https://res.cloudinary.com/${cloudName}/image/upload/w_1200,q_auto,f_auto/${image.cloudinaryId}`
+    }
+
+    // For gallery - just resize width, maintain aspect ratio
+    if (width) {
+      return `https://res.cloudinary.com/${cloudName}/image/upload/w_${width},q_auto,f_auto/${image.cloudinaryId}`
+    }
+
+    // Default - original with quality optimization
+    return `https://res.cloudinary.com/${cloudName}/image/upload/q_auto,f_auto/${image.cloudinaryId}`
   }
 
   const headerImage = category.images.find(img => img.isHeader)
   const galleryImages = category.images.filter(img => !img.isHeader)
 
-  const openLightbox = (image: Image, index: number) => {
+  const openLightbox = (image: ImageType, index: number) => {
     setSelectedImage(image)
     setCurrentImageIndex(index)
   }
@@ -78,6 +88,47 @@ export default function DarkElegantGalleryView({ category, isAdmin }: DarkElegan
     setCurrentImageIndex(prevIndex)
   }
 
+  // Keyboard navigation
+  useEffect(() => {
+    if (!selectedImage) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      switch (e.key) {
+        case 'Escape':
+          closeLightbox()
+          break
+        case 'ArrowLeft':
+          e.preventDefault()
+          previousImage()
+          break
+        case 'ArrowRight':
+          e.preventDefault()
+          nextImage()
+          break
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [selectedImage, currentImageIndex, galleryImages.length])
+
+  // Preload adjacent images for instant navigation
+  useEffect(() => {
+    if (!selectedImage || galleryImages.length <= 1) return
+
+    const preloadImage = (index: number) => {
+      const img = new window.Image()
+      img.src = getOptimizedUrl(galleryImages[index], 1200, true)
+    }
+
+    // Preload next and previous images
+    const nextIndex = (currentImageIndex + 1) % galleryImages.length
+    const prevIndex = currentImageIndex === 0 ? galleryImages.length - 1 : currentImageIndex - 1
+    
+    preloadImage(nextIndex)
+    preloadImage(prevIndex)
+  }, [selectedImage, currentImageIndex, galleryImages])
+
   return (
     <>
       <div className="min-h-screen bg-gray-900">
@@ -90,7 +141,7 @@ export default function DarkElegantGalleryView({ category, isAdmin }: DarkElegan
           {headerImage && (
             <div className="absolute inset-0 opacity-10">
               <Image
-                src={getOptimizedUrl(headerImage, 1920, 1080)}
+                src={getOptimizedUrl(headerImage, 1920)}
                 alt={category.name}
                 fill
                 className="object-cover"
@@ -210,50 +261,31 @@ export default function DarkElegantGalleryView({ category, isAdmin }: DarkElegan
                   <div className="w-16 h-px bg-gradient-to-r from-transparent via-white/50 to-transparent mx-auto"></div>
                 </motion.div>
 
-                {/* Image Grid - Dynamic Masonry Layout */}
-                <div className="columns-1 md:columns-2 lg:columns-3 xl:columns-4 gap-6 space-y-6">
+                {/* Image Grid - Masonry layout */}
+                <div className="columns-1 md:columns-2 lg:columns-3 xl:columns-4 gap-6">
                   {galleryImages.map((image, index) => (
                     <motion.div
                       key={image.id}
                       initial={{ opacity: 0, y: 30 }}
                       whileInView={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.8, delay: index * 0.1 }}
+                      transition={{ duration: 0.8, delay: index * 0.05 }}
                       viewport={{ once: true }}
                       className="group cursor-pointer break-inside-avoid mb-6"
                       onClick={() => openLightbox(image, index)}
                     >
                       <div className="relative overflow-hidden rounded-lg bg-gray-800 border border-gray-700/50">
-                        {/* Dynamic aspect ratio based on image dimensions */}
                         <div className="relative">
-                          <Image
-                            src={getOptimizedUrl(image, 600)}
-                            alt={image.title}
-                            width={600}
-                            height={
-                              image.width && image.height 
-                                ? Math.round((600 * image.height) / image.width)
-                                : 800 // fallback height
-                            }
-                            className="w-full h-auto object-cover transition-all duration-700 group-hover:scale-105"
-                            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
+                          <img
+                            src={getOptimizedUrl(image, 400)}
+                            alt=""
+                            className="w-full h-auto transition-all duration-700 group-hover:scale-105 rounded-lg"
+                            loading="lazy"
                           />
                         </div>
                         
-                        {/* Overlay */}
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors duration-500" />
+                        {/* Simple hover overlay */}
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-500 rounded-lg" />
                         
-                        {/* Image Info Overlay */}
-                        <div className="absolute inset-0 p-6 flex flex-col justify-end bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500">
-                          <div className="text-white">
-                            <h3 className="text-lg font-light mb-1">{image.title}</h3>
-                            {image.description && (
-                              <p className="text-white/80 text-sm leading-relaxed line-clamp-2">
-                                {image.description}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-
                         {/* Hover Border Effect */}
                         <div className="absolute inset-0 border-2 border-transparent group-hover:border-white/20 transition-colors duration-500 rounded-lg" />
                       </div>
@@ -295,7 +327,7 @@ export default function DarkElegantGalleryView({ category, isAdmin }: DarkElegan
                         {subcat.images[0] && (
                           <div className="aspect-[4/3] relative overflow-hidden">
                             <Image
-                              src={getOptimizedUrl(subcat.images[0], 400, 300)}
+                              src={getOptimizedUrl(subcat.images[0], 400)}
                               alt={subcat.name}
                               fill
                               className="object-cover group-hover:scale-110 transition-transform duration-700"
@@ -327,80 +359,71 @@ export default function DarkElegantGalleryView({ category, isAdmin }: DarkElegan
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center p-4"
+            className="fixed inset-0 z-40 bg-black/95 flex items-center justify-center p-4"
             onClick={closeLightbox}
           >
             <div className="relative max-w-7xl max-h-full w-full h-full flex items-center justify-center">
               {/* Close Button */}
               <button
                 onClick={closeLightbox}
-                className="absolute top-6 right-6 z-10 text-white/80 hover:text-white transition-colors p-2 rounded-full hover:bg-white/10"
+                className="fixed top-4 right-4 md:top-6 md:right-6 z-50 w-12 h-12 flex items-center justify-center bg-black/60 hover:bg-black/80 text-white/90 hover:text-white transition-all duration-200 rounded-full backdrop-blur-sm border border-white/20 hover:border-white/40"
               >
                 <X className="w-6 h-6" />
               </button>
 
-              {/* Navigation Buttons */}
-              {galleryImages.length > 1 && (
-                <>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      previousImage()
-                    }}
-                    className="absolute left-6 top-1/2 transform -translate-y-1/2 text-white/80 hover:text-white p-3 rounded-full hover:bg-white/10 transition-colors z-10"
-                  >
-                    <ChevronLeft className="w-8 h-8" />
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      nextImage()
-                    }}
-                    className="absolute right-6 top-1/2 transform -translate-y-1/2 text-white/80 hover:text-white p-3 rounded-full hover:bg-white/10 transition-colors z-10"
-                  >
-                    <ChevronRight className="w-8 h-8" />
-                  </button>
-                </>
-              )}
+              {/* Keyboard Navigation Hint */}
+              <div className="fixed top-4 left-4 md:top-6 md:left-6 z-20 text-white/60 text-xs md:text-sm bg-black/40 backdrop-blur-sm px-3 py-2 rounded-full border border-white/10">
+                ← → to navigate • ESC to close
+              </div>
 
-              {/* Image */}
+              {/* Image Container */}
               <motion.div
-                initial={{ scale: 0.9, opacity: 0 }}
+                key={selectedImage.id}
+                initial={{ scale: 0.95, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.9, opacity: 0 }}
-                transition={{ duration: 0.3 }}
-                className="relative max-w-full max-h-full"
+                exit={{ scale: 0.95, opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                className="relative flex items-center justify-center max-w-full max-h-full"
                 onClick={(e) => e.stopPropagation()}
               >
-                <Image
-                  src={getOptimizedUrl(selectedImage, 1400)}
-                  alt={selectedImage.title}
-                  width={1400}
-                  height={900}
-                  className="max-w-full max-h-full object-contain rounded-lg"
-                />
-                
-                {/* Image Info */}
-                {selectedImage.title && (
-                  <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/80 to-transparent rounded-b-lg">
-                    <h3 className="text-white text-xl font-light mb-2">
-                      {selectedImage.title}
-                    </h3>
-                    {selectedImage.description && (
-                      <p className="text-white/80 text-sm leading-relaxed">
-                        {selectedImage.description}
-                      </p>
-                    )}
-                  </div>
+                {/* Navigation Buttons - POSITIONED OUTSIDE IMAGE EDGES */}
+                {galleryImages.length > 1 && (
+                  <>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        previousImage()
+                      }}
+                      className="absolute -left-16 top-1/2 transform -translate-y-1/2 z-30 w-12 h-12 flex items-center justify-center bg-black/60 hover:bg-black/80 text-white/90 hover:text-white transition-all duration-200 rounded-full backdrop-blur-sm border border-white/20 hover:border-white/40 hover:scale-110"
+                    >
+                      <ChevronLeft className="w-6 h-6" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        nextImage()
+                      }}
+                      className="absolute -right-16 top-1/2 transform -translate-y-1/2 z-30 w-12 h-12 flex items-center justify-center bg-black/60 hover:bg-black/80 text-white/90 hover:text-white transition-all duration-200 rounded-full backdrop-blur-sm border border-white/20 hover:border-white/40 hover:scale-110"
+                    >
+                      <ChevronRight className="w-6 h-6" />
+                    </button>
+                  </>
                 )}
-              </motion.div>
 
-              {/* Image Counter */}
-              {galleryImages.length > 1 && (
-                <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 text-white/70 text-sm bg-black/50 px-4 py-2 rounded-full backdrop-blur-sm">
-                  {currentImageIndex + 1} / {galleryImages.length}
-                </div>
-              )}
+                <img
+                  key={selectedImage.id}
+                  src={getOptimizedUrl(selectedImage, 1200, true)}
+                  alt=""
+                  className="max-w-full max-h-full object-contain rounded-lg"
+                  style={{ 
+                    maxWidth: '90vw', 
+                    maxHeight: '90vh',
+                    width: 'auto',
+                    height: 'auto'
+                  }}
+                  loading="eager"
+                />
+              </motion.div>
             </div>
           </motion.div>
         )}

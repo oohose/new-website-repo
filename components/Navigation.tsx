@@ -66,7 +66,7 @@ export default function ModernNavigation() {
               {/* Admin/User Menu */}
               {session ? (
                 <div className="flex items-center space-x-4">
-                  {session.user?.role === 'ADMIN' && (
+                  {(session.user as any)?.role === 'ADMIN' && (
                     <Link
                       href="/admin"
                       className={`p-2 rounded-full transition-colors duration-300 ${
@@ -74,6 +74,7 @@ export default function ModernNavigation() {
                           ? 'text-gray-900 hover:bg-gray-100' 
                           : 'text-white hover:bg-white/10'
                       }`}
+                      title="Admin Panel"
                     >
                       <Settings className="w-4 h-4" />
                     </Link>
@@ -85,18 +86,20 @@ export default function ModernNavigation() {
                         ? 'text-gray-900 hover:bg-gray-100' 
                         : 'text-white hover:bg-white/10'
                     }`}
+                    title="Sign Out"
                   >
                     <LogOut className="w-4 h-4" />
                   </button>
                 </div>
               ) : (
                 <Link
-                  href="/auth/signin"
+                  href="/admin/signin"
                   className={`p-2 rounded-full transition-colors duration-300 ${
                     isScrolled 
                       ? 'text-gray-900 hover:bg-gray-100' 
                       : 'text-white hover:bg-white/10'
                   }`}
+                  title="Admin Sign In"
                 >
                   <User className="w-4 h-4" />
                 </Link>
@@ -175,14 +178,14 @@ export default function ModernNavigation() {
                       <div className="space-y-1">
                         <div className="px-6 py-2">
                           <p className="text-sm font-medium text-gray-900">
-                            {session.user?.name || session.user?.email}
+                            {(session.user as any)?.name || session.user?.email}
                           </p>
                           <p className="text-xs text-gray-500 capitalize">
-                            {session.user?.role?.toLowerCase() || 'user'}
+                            {(session.user as any)?.role?.toLowerCase() || 'user'}
                           </p>
                         </div>
                         
-                        {session.user?.role === 'ADMIN' && (
+                        {(session.user as any)?.role === 'ADMIN' && (
                           <Link
                             href="/admin"
                             onClick={() => setIsOpen(false)}
@@ -206,12 +209,12 @@ export default function ModernNavigation() {
                       </div>
                     ) : (
                       <Link
-                        href="/auth/signin"
+                        href="/admin/signin"
                         onClick={() => setIsOpen(false)}
                         className="flex items-center px-6 py-3 text-gray-700 hover:bg-gray-50 transition-colors"
                       >
                         <User className="w-4 h-4 mr-3" />
-                        Sign In
+                        Admin Sign In
                       </Link>
                     )}
                   </div>

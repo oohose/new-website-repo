@@ -21,19 +21,30 @@ export default function Contact() {
     setIsSubmitting(true)
 
     try {
-      // In a real application, you would send this to your API
-      await new Promise(resolve => setTimeout(resolve, 1000)) // Simulate API call
-      
-      toast.success(siteConfig.contact.formMessages.success)
-      setFormData({
-        name: '',
-        email: '',
-        message: '',
-        eventType: '',
-        eventDate: '',
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
       })
+
+      if (response.ok) {
+        toast.success('Thank you! Your message has been sent successfully. I\'ll get back to you within 24-48 hours.')
+        setFormData({
+          name: '',
+          email: '',
+          message: '',
+          eventType: '',
+          eventDate: '',
+        })
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to send message. Please try again.')
+      }
     } catch (error) {
-      toast.error(siteConfig.contact.formMessages.error)
+      console.error('Contact form error:', error)
+      toast.error('Failed to send message. Please try again.')
     } finally {
       setIsSubmitting(false)
     }
@@ -67,8 +78,22 @@ export default function Contact() {
     },
   ].filter(link => link.href) // Only show links that are configured
 
+  const eventTypes = [
+    { value: '', label: 'Select an event type' },
+    { value: 'wedding', label: 'Wedding' },
+    { value: 'engagement', label: 'Engagement' },
+    { value: 'portrait', label: 'Portrait Session' },
+    { value: 'family', label: 'Family Photos' },
+    { value: 'senior', label: 'Senior Photos' },
+    { value: 'maternity', label: 'Maternity' },
+    { value: 'newborn', label: 'Newborn' },
+    { value: 'event', label: 'Event Photography' },
+    { value: 'commercial', label: 'Commercial' },
+    { value: 'other', label: 'Other' }
+  ]
+
   return (
-    <section id="contact" className={`py-20 lg:py-32 ${siteConfig.theme.gradients.contact}`}>
+    <section id="contact" className="py-20 lg:py-32 bg-gradient-to-b from-black to-gray-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <motion.div
@@ -79,10 +104,10 @@ export default function Contact() {
           className="text-center mb-16 lg:mb-24"
         >
           <h2 className="text-3xl md:text-4xl lg:text-5xl font-light text-white mb-6 gradient-text">
-            {siteConfig.content.contact.title}
+            Let's Create Something Beautiful
           </h2>
           <p className="text-lg text-white/70 max-w-2xl mx-auto">
-            {siteConfig.content.contact.subtitle}
+            Ready to capture your special moments? I'd love to hear about your vision and bring it to life.
           </p>
         </motion.div>
 
@@ -96,7 +121,7 @@ export default function Contact() {
             className="space-y-8"
           >
             <div>
-              <h3 className="text-2xl font-semibold text-white mb-6">{siteConfig.content.contact.infoTitle}</h3>
+              <h3 className="text-2xl font-semibold text-white mb-6">Get in Touch</h3>
               <div className="space-y-6">
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
@@ -166,7 +191,7 @@ export default function Contact() {
                 transition={{ duration: 0.6, delay: 0.4 }}
                 viewport={{ once: true }}
               >
-                <h4 className="text-xl font-semibold text-white mb-4">{siteConfig.content.contact.socialTitle}</h4>
+                <h4 className="text-xl font-semibold text-white mb-4">Follow My Work</h4>
                 <div className="flex space-x-4">
                   {socialLinks.map((social) => (
                     <a
@@ -237,7 +262,7 @@ export default function Contact() {
                     onChange={handleChange}
                     className="form-select"
                   >
-                    {siteConfig.contact.eventTypes.map((option) => (
+                    {eventTypes.map((option) => (
                       <option key={option.value} value={option.value}>
                         {option.label}
                       </option>
@@ -285,12 +310,12 @@ export default function Contact() {
                 {isSubmitting ? (
                   <>
                     <div className="w-5 h-5 spinner" />
-                    <span>{siteConfig.contact.formMessages.sending}</span>
+                    <span>Sending...</span>
                   </>
                 ) : (
                   <>
                     <Send className="w-5 h-5" />
-                    <span>{siteConfig.contact.formMessages.send}</span>
+                    <span>Send Message</span>
                   </>
                 )}
               </motion.button>

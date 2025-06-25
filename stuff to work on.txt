@@ -7,3 +7,29 @@
 7. image display seems to have a hard time displaying new images for the first time.
 8. need functional inline edit modal menus for categories AND images when in admin view
 9. functional email integration for the contact section.
+10. remove privacy policy and terms of service at the bottom.
+11. category picker in upload menu that resembles the old one. (file explorer style, attach image)
+12. remove "experience, happy clients, and photos taken" statistics in about me section
+13. vercel deployment.
+
+
+can you also get rid of titles for images, and instead of cropping and showing the title of an image on hover just give the image a little glowing border but give it a nice animation
+
+1. image display in galleries doesn't show the full image, only a cropped zoomed in version of the image.
+2. no edit buttons on existing categories in my category manager
+3. no edit buttons on my existing galleries in my portfolio section when logged in
+4. private galleries give 404 when being accessed via link.
+5. private galleries don't show in portfolio for admin if logging back in.
+6. deleting category has no modal menu, brings up this error: 
+	components\admin\AdminDashboard.tsx (732:31) @ deleteCategory
+
+  730 |       })
+  731 |
+> 732 |       if (!response.ok) throw new Error('Failed to delete category')
+      |                               ^
+  733 |       setCategories(prev => prev.filter(cat => cat.id !== id))
+  734 |     } catch (error) {
+  735 |       console.error('Delete category error:', error)
+
+9. theres no way to manage uploaded photos, have an uploaded photos section with edit and delete functions that sync with cloudinary in my upload tab
+10. quick actions buttons in my admin panel don't do anything.

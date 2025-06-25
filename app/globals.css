@@ -355,3 +355,104 @@
 .category-card:hover {
   @apply transform scale-105;
 }
+
+/* Lightbox Navigation Fixes */
+.lightbox-nav-button {
+  position: fixed !important;
+  z-index: 9999 !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  width: 60px !important;
+  height: 60px !important;
+  border-radius: 50% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  color: white !important;
+  font-size: 24px !important;
+  background-color: rgba(0, 0, 0, 0.6) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  backdrop-filter: blur(4px) !important;
+  transition: all 0.2s ease !important;
+}
+
+.lightbox-nav-button:hover {
+  background-color: rgba(0, 0, 0, 0.8) !important;
+  border-color: rgba(255, 255, 255, 0.4) !important;
+  transform: translateY(-50%) scale(1.1) !important;
+}
+
+.lightbox-nav-button.left {
+  left: 20px !important;
+}
+
+.lightbox-nav-button.right {
+  right: 20px !important;
+}
+
+/* Force lightbox elements to render correctly */
+.lightbox-container * {
+  box-sizing: border-box !important;
+}
+
+/* Ensure nothing interferes with fixed positioning */
+.lightbox-nav-button {
+  position: fixed !important;
+  /* Override any conflicting styles */
+  margin: 0 !important;
+  padding: 0 !important;
+  border-width: 1px !important;
+  border-style: solid !important;
+}
+
+/* Debug styles - remove these after testing */
+.debug-lightbox {
+  position: fixed !important;
+  top: 10px !important;
+  left: 10px !important;
+  z-index: 10000 !important;
+  background: red !important;
+  color: white !important;
+  padding: 10px !important;
+  font-size: 16px !important;
+}
+
+.form-checkbox {
+  @apply w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500 focus:ring-2;
+}
+
+.form-checkbox:checked {
+  @apply bg-blue-600 border-blue-600;
+}
+
+.form-checkbox:indeterminate {
+  @apply bg-blue-600 border-blue-600;
+  background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3crect x='4' y='7' width='8' height='2'/%3e%3c/svg%3e");
+}
+
+/* Form input styles */
+.form-input {
+  @apply w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+}
+
+.form-textarea {
+@apply w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y;
+}
+
+.form-select {
+  @apply w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+}
+
+/* Button styles */
+.btn-primary {
+  @apply px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition-colors disabled:cursor-not-allowed;
+}
+
+.btn-ghost {
+  @apply px-4 py-2 bg-transparent hover:bg-gray-700 text-gray-300 hover:text-white border border-gray-600 hover:border-gray-500 rounded-lg transition-colors;
+}
+
+.spinner {
+  @apply animate-spin rounded-full border-2 border-white border-t-transparent;
+}

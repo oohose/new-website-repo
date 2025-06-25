@@ -1,415 +1,404 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useDropzone } from 'react-dropzone'
-import { Upload, X, Check, AlertCircle, Image as ImageIcon, Zap } from 'lucide-react'
+import { 
+  Upload as UploadIcon, 
+  X, 
+  CheckCircle, 
+  AlertCircle,
+  FolderOpen,
+  Folder,
+  ChevronRight,
+  ChevronDown
+} from 'lucide-react'
+import Image from 'next/image'
 import toast from 'react-hot-toast'
-import { ImageCompressor } from '@/utils/imageCompression'
+import { Category, UploadFile } from '@/lib/types'
 
-interface UploadedFile {
-  file: File
-  preview: string
-  uploading: boolean
-  uploaded: boolean
-  compressing: boolean
-  error?: string
-  publicId?: string
-  url?: string
-  originalSize?: number
-  compressedSize?: number
-  compressionRatio?: number
-  wasCompressed?: boolean
+interface CategoryPickerProps {
+  categories: Category[]
+  selectedCategoryId: string
+  onCategorySelect: (categoryId: string) => void
 }
 
-interface Category {
-  id: string
-  key: string
-  name: string
-  description: string | null
-  isPrivate: boolean
+interface UploadComponentProps {
+  categories: Category[]
+  onUploadComplete: () => void
 }
 
-interface CloudinaryUploadProps {
-  onUploadComplete?: (results: any[]) => void
-  maxFiles?: number
-  category?: string
-}
-
-export default function CloudinaryUpload({ 
-  onUploadComplete, 
-  maxFiles = 10,
-  category 
-}: CloudinaryUploadProps) {
-  const [files, setFiles] = useState<UploadedFile[]>([])
-  const [uploading, setUploading] = useState(false)
-  const [selectedCategory, setSelectedCategory] = useState(category || '')
-  const [categories, setCategories] = useState<Category[]>([])
-  const [loadingCategories, setLoadingCategories] = useState(true)
-
-  // Fetch categories on mount
-  useEffect(() => {
-    fetchCategories()
-  }, [])
-
-  const fetchCategories = async () => {
-    try {
-      const response = await fetch('/api/categories?includePrivate=true')
-      if (response.ok) {
-        const data = await response.json()
-        setCategories(data.categories || [])
+// Image compression function
+const compressImage = (file: File, maxSizeMB: number = 10): Promise<File> => {
+  return new Promise((resolve) => {
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d')
+    const img = new window.Image()
+    
+    img.onload = () => {
+      const maxWidth = 2000
+      const maxHeight = 2000
+      let { width, height } = img
+      
+      if (width > height) {
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width
+          width = maxWidth
+        }
       } else {
-        console.error('Failed to fetch categories')
+        if (height > maxHeight) {
+          width = (width * maxHeight) / height
+          height = maxHeight
+        }
       }
-    } catch (error) {
-      console.error('Error fetching categories:', error)
-    } finally {
-      setLoadingCategories(false)
+      
+      canvas.width = width
+      canvas.height = height
+      ctx?.drawImage(img, 0, 0, width, height)
+      
+      const tryCompress = (quality: number) => {
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const compressedFile = new File([blob], file.name, {
+              type: 'image/jpeg',
+              lastModified: Date.now()
+            })
+            
+            if (compressedFile.size > maxSizeMB * 1024 * 1024 && quality > 0.1) {
+              tryCompress(quality - 0.1)
+            } else {
+              resolve(compressedFile)
+            }
+          } else {
+            resolve(file)
+          }
+        }, 'image/jpeg', quality)
+      }
+      
+      tryCompress(0.8)
     }
+    
+    img.onerror = () => resolve(file)
+    img.src = URL.createObjectURL(file)
+  })
+}
+
+// Category Picker Component
+function CategoryPicker({ categories, selectedCategoryId, onCategorySelect }: CategoryPickerProps) {
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
+  
+  const toggleExpanded = (categoryId: string) => {
+    const newExpanded = new Set(expandedCategories)
+    if (newExpanded.has(categoryId)) {
+      newExpanded.delete(categoryId)
+    } else {
+      newExpanded.add(categoryId)
+    }
+    setExpandedCategories(newExpanded)
   }
 
-  const onDrop = useCallback(async (acceptedFiles: File[]) => {
-    const newFiles = acceptedFiles.map(file => ({
-      file,
-      preview: URL.createObjectURL(file),
-      uploading: false,
-      uploaded: false,
-      compressing: false,
-      originalSize: file.size
-    }))
-    
-    setFiles(prev => [...prev, ...newFiles].slice(0, maxFiles))
+  const renderCategory = (category: Category, level = 0) => {
+    const hasSubcategories = category.subcategories && category.subcategories.length > 0
+    const isExpanded = expandedCategories.has(category.id)
+    const isSelected = selectedCategoryId === category.id
 
-    // Start compression for large files
-    for (let i = 0; i < newFiles.length; i++) {
-      const fileIndex = files.length + i
-      compressFileIfNeeded(fileIndex, newFiles[i].file)
+    return (
+      <div key={category.id} className={`${level > 0 ? 'ml-4' : ''}`}>
+        <div
+          className={`flex items-center space-x-2 p-2 rounded cursor-pointer transition-colors ${
+            isSelected ? 'bg-blue-600 text-white' : 'hover:bg-gray-700 text-gray-300'
+          }`}
+          onClick={() => onCategorySelect(category.id)}
+        >
+          {hasSubcategories && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                toggleExpanded(category.id)
+              }}
+              className="p-1 hover:bg-gray-600 rounded transition-colors"
+            >
+              {isExpanded ? (
+                <ChevronDown className="w-4 h-4" />
+              ) : (
+                <ChevronRight className="w-4 h-4" />
+              )}
+            </button>
+          )}
+          {!hasSubcategories && level > 0 && <div className="w-6" />}
+          
+          {hasSubcategories ? (
+            <FolderOpen className="w-4 h-4 flex-shrink-0" />
+          ) : (
+            <Folder className="w-4 h-4 flex-shrink-0" />
+          )}
+          
+          <span className="flex-1 text-sm">{category.name}</span>
+          <span className="text-xs text-gray-500">
+            {category._count?.images || 0}
+          </span>
+        </div>
+        
+        {hasSubcategories && isExpanded && (
+          <div className="mt-1">
+            {category.subcategories?.map(subcategory => 
+              renderCategory(subcategory, level + 1)
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 max-h-64 overflow-y-auto">
+      <h4 className="text-white font-medium mb-3">Select Category</h4>
+      {categories.filter(cat => !cat.parentId).map(category => renderCategory(category))}
+    </div>
+  )
+}
+
+// Main Upload Component
+export default function UploadComponent({ categories, onUploadComplete }: UploadComponentProps) {
+  const [files, setFiles] = useState<UploadFile[]>([])
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('')
+  const [isUploading, setIsUploading] = useState(false)
+  const [dragActive, setDragActive] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const clearAllFiles = useCallback(() => {
+    files.forEach(file => {
+      if (file.preview) {
+        URL.revokeObjectURL(file.preview)
+      }
+    })
+    setFiles([])
+  }, [files])
+
+  const handleFiles = useCallback(async (newFiles: FileList | File[]) => {
+    const fileArray = Array.from(newFiles)
+    const validFiles = fileArray.filter(file => {
+      if (!file.type.startsWith('image/')) {
+        toast.error(`${file.name} is not an image file`)
+        return false
+      }
+      return true
+    })
+
+    const uploadFilesPromises = validFiles.map(async (file): Promise<UploadFile | null> => {
+      let processedFile = file
+      
+      if (file.size > 10 * 1024 * 1024) {
+        toast(`Compressing ${file.name}...`)
+        try {
+          processedFile = await compressImage(file, 9)
+          toast.success(`${file.name} compressed from ${(file.size / 1024 / 1024).toFixed(1)}MB to ${(processedFile.size / 1024 / 1024).toFixed(1)}MB`)
+        } catch (error) {
+          toast.error(`Failed to compress ${file.name}`)
+          return null
+        }
+      }
+
+      return {
+        id: Math.random().toString(36),
+        file: processedFile,
+        preview: URL.createObjectURL(file),
+        status: 'pending' as const,
+        progress: 0,
+        title: file.name.replace(/\.[^/.]+$/, ''),
+        compressedFile: processedFile !== file ? processedFile : undefined
+      }
+    })
+
+    const uploadFilesResults = await Promise.all(uploadFilesPromises)
+    const validUploadFiles = uploadFilesResults.filter((file): file is UploadFile => file !== null)
+    setFiles(prev => [...prev, ...validUploadFiles])
+  }, [])
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragActive(false)
+    
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleFiles(e.dataTransfer.files)
     }
-  }, [maxFiles, files.length])
+  }, [handleFiles])
 
-  const compressFileIfNeeded = async (index: number, originalFile: File) => {
-    const fileSizeMB = originalFile.size / (1024 * 1024)
-    
-    // Only compress if file is large and is a supported image type
-    if (fileSizeMB <= 10 || !ImageCompressor.isSupportedImageType(originalFile)) {
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragActive(true)
+  }, [])
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragActive(false)
+  }, [])
+
+  const removeFile = useCallback((fileId: string) => {
+    setFiles(prev => {
+      const fileToRemove = prev.find(f => f.id === fileId)
+      if (fileToRemove?.preview) {
+        URL.revokeObjectURL(fileToRemove.preview)
+      }
+      return prev.filter(f => f.id !== fileId)
+    })
+  }, [])
+
+  const updateFileTitle = useCallback((fileId: string, title: string) => {
+    setFiles(prev => prev.map(file => 
+      file.id === fileId ? { ...file, title } : file
+    ))
+  }, [])
+
+  const uploadFiles = async () => {
+    if (!selectedCategoryId) {
+      toast.error('Please select a category')
       return
     }
 
-    // Set compressing state
-    setFiles(prev => {
-      const newFiles = [...prev]
-      if (newFiles[index]) {
-        newFiles[index] = { ...newFiles[index], compressing: true }
-      }
-      return newFiles
-    })
-
-    try {
-      const result = await ImageCompressor.compressIfNeeded(originalFile)
-      
-      if (result.wasCompressed) {
-        // Update file with compressed version
-        setFiles(prev => {
-          const newFiles = [...prev]
-          if (newFiles[index]) {
-            // Revoke old preview URL
-            URL.revokeObjectURL(newFiles[index].preview)
-            
-            newFiles[index] = {
-              ...newFiles[index],
-              file: result.file,
-              preview: URL.createObjectURL(result.file),
-              compressing: false,
-              originalSize: result.originalSize,
-              compressedSize: result.compressedSize,
-              compressionRatio: result.compressionRatio,
-              wasCompressed: true
-            }
-          }
-          return newFiles
-        })
-
-        toast.success(
-          `Compressed ${originalFile.name}: ${ImageCompressor.formatFileSize(result.originalSize)} → ${ImageCompressor.formatFileSize(result.compressedSize)}`
-        )
-      } else {
-        // Just update the compressing state
-        setFiles(prev => {
-          const newFiles = [...prev]
-          if (newFiles[index]) {
-            newFiles[index] = { ...newFiles[index], compressing: false }
-          }
-          return newFiles
-        })
-      }
-    } catch (error) {
-      console.error('Compression error:', error)
-      setFiles(prev => {
-        const newFiles = [...prev]
-        if (newFiles[index]) {
-          newFiles[index] = { 
-            ...newFiles[index], 
-            compressing: false,
-            error: 'Compression failed'
-          }
-        }
-        return newFiles
-      })
-      toast.error(`Failed to compress ${originalFile.name}`)
-    }
-  }
-
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: {
-      'image/*': ['.jpeg', '.jpg', '.png', '.webp', '.heic']
-    },
-    maxFiles,
-    multiple: true
-  })
-
-  const removeFile = (index: number) => {
-    setFiles(prev => {
-      const newFiles = [...prev]
-      URL.revokeObjectURL(newFiles[index].preview)
-      newFiles.splice(index, 1)
-      return newFiles
-    })
-  }
-
-  const uploadToCloudinary = async (file: File): Promise<any> => {
-    const formData = new FormData()
-    formData.append('file', file)
-    
-    // Use the correct upload preset from your environment
-    const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET
-    if (!uploadPreset) {
-      throw new Error('Cloudinary upload preset not configured')
-    }
-    
-    formData.append('upload_preset', uploadPreset)
-    
-    // Find the selected category to use its key for the folder
-    const categoryObj = categories.find(cat => cat.id === selectedCategory)
-    const folderName = categoryObj ? categoryObj.key : 'uncategorized'
-    formData.append('folder', `photography/${folderName}`)
-
-    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME
-    if (!cloudName) {
-      throw new Error('Cloudinary cloud name not configured')
-    }
-
-    const response = await fetch(
-      `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
-      {
-        method: 'POST',
-        body: formData,
-      }
-    )
-
-    if (!response.ok) {
-      const errorData = await response.text()
-      console.error('Cloudinary upload error:', errorData)
-      throw new Error(`Upload failed: ${response.status}`)
-    }
-
-    return response.json()
-  }
-
-  const saveToDatabase = async (uploadResults: any[]) => {
-    const response = await fetch('/api/images', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        images: uploadResults.map(result => ({
-          title: result.original_filename || 'Untitled',
-          description: null,
-          publicId: result.public_id,
-          url: result.secure_url,
-          width: result.width,
-          height: result.height,
-          format: result.format,
-          bytes: result.bytes,
-          categoryId: selectedCategory,
-          isHeader: false,
-          order: 0
-        }))
-      })
-    })
-
-    if (!response.ok) {
-      const errorData = await response.json()
-      console.error('Database save error:', errorData)
-      throw new Error('Failed to save to database')
-    }
-
-    return response.json()
-  }
-
-  const handleUpload = async () => {
     if (files.length === 0) {
       toast.error('Please select files to upload')
       return
     }
 
-    if (!selectedCategory) {
-      toast.error('Please select a category')
-      return
-    }
-
-    // Check if any files are still compressing
-    const stillCompressing = files.some(file => file.compressing)
-    if (stillCompressing) {
-      toast.error('Please wait for compression to complete')
-      return
-    }
-
-    // Validate environment variables
-    if (!process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME) {
-      toast.error('Cloudinary configuration missing')
-      return
-    }
-
-    if (!process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET) {
-      toast.error('Cloudinary upload preset not configured')
-      return
-    }
-
-    setUploading(true)
-    const uploadResults = []
+    setIsUploading(true)
 
     try {
-      // Upload files one by one to show progress
-      for (let i = 0; i < files.length; i++) {
-        if (files[i].uploaded) continue
+      const uploadPromises = files.map(async (uploadFile) => {
+        if (uploadFile.status !== 'pending') return
 
-        setFiles(prev => {
-          const newFiles = [...prev]
-          newFiles[i] = { ...newFiles[i], uploading: true }
-          return newFiles
-        })
+        setFiles(prev => prev.map(f => 
+          f.id === uploadFile.id 
+            ? { ...f, status: 'uploading', progress: 0 }
+            : f
+        ))
 
         try {
-          const result = await uploadToCloudinary(files[i].file)
-          uploadResults.push(result)
+          const formData = new FormData()
+          const fileToUpload = uploadFile.compressedFile || uploadFile.file
+          formData.append('file', fileToUpload)
+          formData.append('title', uploadFile.title)
+          formData.append('categoryId', selectedCategoryId)
 
-          setFiles(prev => {
-            const newFiles = [...prev]
-            newFiles[i] = {
-              ...newFiles[i],
-              uploading: false,
-              uploaded: true,
-              publicId: result.public_id,
-              url: result.secure_url
-            }
-            return newFiles
+          const response = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData,
           })
 
-          toast.success(`Uploaded ${files[i].file.name}`)
-        } catch (error) {
-          console.error('Upload error for file:', files[i].file.name, error)
-          setFiles(prev => {
-            const newFiles = [...prev]
-            newFiles[i] = {
-              ...newFiles[i],
-              uploading: false,
-              uploaded: false,
-              error: error instanceof Error ? error.message : 'Upload failed'
-            }
-            return newFiles
-          })
-          toast.error(`Failed to upload ${files[i].file.name}`)
+          if (response.ok) {
+            setFiles(prev => prev.map(f => 
+              f.id === uploadFile.id 
+                ? { ...f, status: 'success', progress: 100 }
+                : f
+            ))
+          } else {
+            const error = await response.json()
+            throw new Error(error.message || 'Upload failed')
+          }
+        } catch (error: any) {
+          setFiles(prev => prev.map(f => 
+            f.id === uploadFile.id 
+              ? { ...f, status: 'error', error: error.message }
+              : f
+          ))
         }
+      })
+
+      await Promise.all(uploadPromises)
+      
+      const successCount = files.filter(f => f.status === 'success').length
+      const errorCount = files.filter(f => f.status === 'error').length
+      
+      if (successCount > 0) {
+        toast.success(`${successCount} images uploaded successfully`)
+        onUploadComplete()
+      }
+      
+      if (errorCount > 0) {
+        toast.error(`${errorCount} images failed to upload`)
       }
 
-      // Save successful uploads to database
-      if (uploadResults.length > 0) {
-        await saveToDatabase(uploadResults)
-        toast.success(`Successfully uploaded ${uploadResults.length} images`)
-        onUploadComplete?.(uploadResults)
-      }
+      setTimeout(() => {
+        clearAllFiles()
+      }, 2000)
 
     } catch (error) {
-      console.error('Upload process error:', error)
-      toast.error('Upload process failed')
+      console.error('Upload error:', error)
+      toast.error('Upload failed')
     } finally {
-      setUploading(false)
+      setIsUploading(false)
     }
   }
 
-  const clearAll = () => {
-    files.forEach(file => URL.revokeObjectURL(file.preview))
-    setFiles([])
-  }
+  const selectedCategory = categories.find(cat => cat.id === selectedCategoryId)
+  const pendingFiles = files.filter(f => f.status === 'pending')
+  const canUpload = pendingFiles.length > 0 && selectedCategoryId && !isUploading
 
   return (
     <div className="space-y-6">
-      {/* Category Selection */}
-      <div>
-        <label className="block text-sm font-medium text-white mb-2">
-          Select Category *
-        </label>
-        {loadingCategories ? (
-          <div className="text-gray-400">Loading categories...</div>
-        ) : (
-          <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white focus:border-blue-500 focus:outline-none"
-            required
-          >
-            <option value="">Choose a category...</option>
-            {categories.map((cat) => (
-              <option key={cat.id} value={cat.id}>
-                {cat.name} {cat.isPrivate ? '(Private)' : ''}
-              </option>
-            ))}
-          </select>
-        )}
-        
-        {!loadingCategories && categories.length === 0 && (
-          <p className="text-yellow-400 text-sm mt-2">
-            No categories found. Please create a category first.
-          </p>
-        )}
-      </div>
+      {/* Category Picker */}
+      <CategoryPicker
+        categories={categories}
+        selectedCategoryId={selectedCategoryId}
+        onCategorySelect={setSelectedCategoryId}
+      />
 
-      {/* Compression Info */}
-      <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-4">
-        <div className="flex items-center space-x-2 mb-2">
-          <Zap className="w-5 h-5 text-blue-400" />
-          <h3 className="text-blue-400 font-medium">Smart Compression</h3>
+      {/* Selected Category Display */}
+      {selectedCategory && (
+        <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+          <div className="flex items-center space-x-2">
+            <FolderOpen className="w-5 h-5 text-blue-400" />
+            <span className="text-white font-medium">
+              Uploading to: {selectedCategory.name}
+            </span>
+            {selectedCategory.isPrivate && (
+              <span className="px-2 py-1 bg-red-500/20 text-red-400 text-xs rounded-full">
+                Private
+              </span>
+            )}
+          </div>
         </div>
-        <p className="text-blue-200 text-sm">
-          Files larger than 10MB will be automatically compressed to under 10MB while maintaining quality.
-        </p>
-      </div>
+      )}
 
-      {/* Dropzone */}
+      {/* Drop Zone */}
       <div
-        {...getRootProps()}
-        className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
-          isDragActive
+        className={`relative border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+          dragActive
             ? 'border-blue-400 bg-blue-400/10'
             : 'border-gray-600 hover:border-gray-500'
         }`}
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
       >
-        <input {...getInputProps()} />
-        <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-        <p className="text-lg text-white mb-2">
-          {isDragActive ? 'Drop the files here...' : 'Drag & drop images here'}
-        </p>
-        <p className="text-gray-400">
-          or click to select files (max {maxFiles} files)
-        </p>
-        <p className="text-sm text-gray-500 mt-2">
-          Supports: JPEG, PNG, WebP, HEIC
-        </p>
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept="image/*"
+          onChange={(e) => e.target.files && handleFiles(e.target.files)}
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+        />
+        
+        <div className="space-y-4">
+          <div className="w-12 h-12 mx-auto bg-gray-700 rounded-full flex items-center justify-center">
+            <UploadIcon className="w-6 h-6 text-gray-400" />
+          </div>
+          
+          <div>
+            <p className="text-white font-medium mb-2">
+              Drop images here or click to browse
+            </p>
+            <p className="text-gray-400 text-sm">
+              Supports JPG, PNG, WebP. Files over 10MB will be automatically compressed.
+            </p>
+          </div>
+        </div>
       </div>
 
-      {/* File Preview Grid */}
+      {/* File List */}
       <AnimatePresence>
         {files.length > 0 && (
           <motion.div
@@ -418,139 +407,121 @@ export default function CloudinaryUpload({
             exit={{ opacity: 0, height: 0 }}
             className="space-y-4"
           >
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-white">
-                Selected Files ({files.length})
-              </h3>
-              <button
-                onClick={clearAll}
-                className="text-sm text-red-400 hover:text-red-300"
-              >
-                Clear All
-              </button>
+            <div className="flex justify-between items-center">
+              <h4 className="text-white font-medium">
+                Files to Upload ({files.length})
+              </h4>
+              <div className="flex space-x-2">
+                <button
+                  onClick={clearAllFiles}
+                  disabled={isUploading}
+                  className="text-sm text-gray-400 hover:text-white transition-colors disabled:opacity-50"
+                >
+                  Clear All
+                </button>
+                <button
+                  onClick={uploadFiles}
+                  disabled={!canUpload}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    canUpload
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                      : 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                  }`}
+                >
+                  {isUploading ? 'Uploading...' : `Upload ${pendingFiles.length} Files`}
+                </button>
+              </div>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {files.map((file, index) => (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {files.map((uploadFile) => (
                 <motion.div
-                  key={index}
-                  initial={{ opacity: 0, scale: 0.8 }}
+                  key={uploadFile.id}
+                  initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.8 }}
-                  className="relative group"
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="bg-gray-800 border border-gray-700 rounded-lg p-4"
                 >
-                  <div className="aspect-square rounded-lg overflow-hidden bg-gray-800">
-                    <img
-                      src={file.preview}
-                      alt={file.file.name}
-                      className="w-full h-full object-cover"
-                    />
-                    
-                    {/* Overlay */}
-                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button
-                        onClick={() => removeFile(index)}
-                        className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
+                  <div className="flex space-x-3">
+                    {/* Preview */}
+                    <div className="w-16 h-16 relative flex-shrink-0 bg-gray-700 rounded overflow-hidden">
+                      <Image
+                        src={uploadFile.preview}
+                        alt={uploadFile.title}
+                        fill
+                        className="object-cover"
+                      />
                     </div>
 
-                    {/* Status Indicator */}
-                    <div className="absolute bottom-2 right-2">
-                      {file.compressing && (
-                        <div className="bg-yellow-500 text-white rounded-full p-1" title="Compressing...">
-                          <Zap className="w-4 h-4 animate-pulse" />
-                        </div>
-                      )}
-                      {file.uploading && (
-                        <div className="bg-blue-500 text-white rounded-full p-1">
-                          <div className="w-4 h-4 animate-spin border-2 border-white border-t-transparent rounded-full" />
-                        </div>
-                      )}
-                      {file.uploaded && (
-                        <div className="bg-green-500 text-white rounded-full p-1">
-                          <Check className="w-4 h-4" />
-                        </div>
-                      )}
-                      {file.error && (
-                        <div className="bg-red-500 text-white rounded-full p-1" title={file.error}>
-                          <AlertCircle className="w-4 h-4" />
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Compression Badge */}
-                    {file.wasCompressed && (
-                      <div className="absolute top-2 left-2 bg-green-500 text-white rounded px-2 py-1 text-xs">
-                        -{Math.round((1 - 1/file.compressionRatio!) * 100)}%
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="mt-1">
-                    <p className="text-xs text-gray-400 truncate">
-                      {file.file.name}
-                    </p>
-                    <div className="flex items-center justify-between text-xs text-gray-500">
-                      <span>
-                        {file.compressedSize 
-                          ? ImageCompressor.formatFileSize(file.compressedSize)
-                          : ImageCompressor.formatFileSize(file.file.size)
-                        }
-                      </span>
-                      {file.wasCompressed && (
-                        <span className="text-green-400">
-                          Compressed
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <input
+                        type="text"
+                        value={uploadFile.title}
+                        onChange={(e) => updateFileTitle(uploadFile.id, e.target.value)}
+                        disabled={uploadFile.status !== 'pending'}
+                        className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white text-sm disabled:opacity-50"
+                        placeholder="Image title"
+                      />
+                      
+                      <div className="flex items-center justify-between mt-2">
+                        <span className="text-xs text-gray-400">
+                          {uploadFile.compressedFile ? (
+                            <>
+                              <span className="line-through text-red-400">
+                                {(uploadFile.file.size / 1024 / 1024).toFixed(1)}MB
+                              </span>
+                              {' → '}
+                              <span className="text-green-400">
+                                {(uploadFile.compressedFile.size / 1024 / 1024).toFixed(1)}MB
+                              </span>
+                            </>
+                          ) : (
+                            `${(uploadFile.file.size / 1024 / 1024).toFixed(1)}MB`
+                          )}
                         </span>
+                        
+                        <div className="flex items-center space-x-2">
+                          {uploadFile.status === 'pending' && (
+                            <button
+                              onClick={() => removeFile(uploadFile.id)}
+                              disabled={isUploading}
+                              className="text-gray-400 hover:text-red-400 transition-colors disabled:opacity-50"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          )}
+                          
+                          {uploadFile.status === 'uploading' && (
+                            <div className="w-4 h-4 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+                          )}
+                          
+                          {uploadFile.status === 'success' && (
+                            <CheckCircle className="w-4 h-4 text-green-400" />
+                          )}
+                          
+                          {uploadFile.status === 'error' && (
+                            <AlertCircle className="w-4 h-4 text-red-400" />
+                          )}
+                        </div>
+                      </div>
+                      
+                      {uploadFile.status === 'uploading' && (
+                        <div className="w-full bg-gray-700 rounded-full h-1 mt-2">
+                          <div 
+                            className="bg-blue-500 h-1 rounded-full transition-all duration-300"
+                            style={{ width: `${uploadFile.progress}%` }}
+                          />
+                        </div>
+                      )}
+                      
+                      {uploadFile.status === 'error' && uploadFile.error && (
+                        <p className="text-xs text-red-400 mt-1">{uploadFile.error}</p>
                       )}
                     </div>
-                    {file.error && (
-                      <p className="text-xs text-red-400 mt-1 truncate">
-                        {file.error}
-                      </p>
-                    )}
                   </div>
                 </motion.div>
               ))}
-            </div>
-
-            {/* Upload Button */}
-            <div className="flex justify-end space-x-4">
-              <button
-                onClick={clearAll}
-                className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
-                disabled={uploading}
-              >
-                Clear All
-              </button>
-              <button
-                onClick={handleUpload}
-                disabled={
-                  uploading || 
-                  files.length === 0 || 
-                  !selectedCategory || 
-                  files.some(f => f.compressing)
-                }
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
-              >
-                {uploading ? (
-                  <>
-                    <div className="w-4 h-4 animate-spin border-2 border-white border-t-transparent rounded-full" />
-                    <span>Uploading...</span>
-                  </>
-                ) : files.some(f => f.compressing) ? (
-                  <>
-                    <Zap className="w-4 h-4 animate-pulse" />
-                    <span>Compressing...</span>
-                  </>
-                ) : (
-                  <>
-                    <Upload className="w-4 h-4" />
-                    <span>Upload {files.length} Files</span>
-                  </>
-                )}
-              </button>
             </div>
           </motion.div>
         )}

@@ -1,6 +1,4 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
+// prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
@@ -8,6 +6,19 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  role          Role      @default(USER)
+  accounts      Account[]
+  sessions      Session[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }
 
 model Account {
@@ -37,19 +48,6 @@ model Session {
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String    @unique
-  emailVerified DateTime?
-  image         String?
-  role          Role      @default(USER)
-  accounts      Account[]
-  sessions      Session[]
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-}
-
 model VerificationToken {
   identifier String
   token      String   @unique
@@ -59,43 +57,45 @@ model VerificationToken {
 }
 
 model Category {
-  id            String      @id @default(cuid())
-  key           String      @unique
-  name          String
-  description   String?
-  isPrivate     Boolean     @default(false)
-  parentId      String?
-  parent        Category?   @relation("CategoryHierarchy", fields: [parentId], references: [id])
-  subcategories Category[]  @relation("CategoryHierarchy")
-  images        Image[]
-  socialLinks   Json?       // Store social media links as JSON
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-
-  @@index([parentId])
-  @@index([isPrivate])
+  id             String     @id @default(cuid())
+  key            String     @unique
+  name           String
+  description    String?
+  isPrivate      Boolean    @default(false)
+  parentId       String?
+  parent         Category?  @relation("CategoryParent", fields: [parentId], references: [id])
+  subcategories  Category[] @relation("CategoryParent")
+  images         Image[]
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
 }
 
 model Image {
   id           String   @id @default(cuid())
   title        String
   description  String?
-  cloudinaryId String   @unique // Cloudinary public_id
-  url          String   // Cloudinary secure_url
+  cloudinaryId String   @unique
+  url          String
   width        Int?
   height       Int?
   format       String?
-  bytes        Int?
+  bytes        Int?     // Keep existing column (file size in bytes)
+  isHeader     Boolean  @default(false) // Keep existing column
+  order        Int      @default(0)
   categoryId   String
   category     Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  isHeader     Boolean  @default(false) // Category header image
-  order        Int      @default(0) // For custom ordering
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+}
 
-  @@index([categoryId])
-  @@index([isHeader])
-  @@index([order])
+model ContactSubmission {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  message   String   @db.Text
+  eventType String?
+  eventDate DateTime?
+  createdAt DateTime @default(now())
 }
 
 enum Role {

@@ -1,4 +1,4 @@
-import { v2 as cloudinary } from 'cloudinary';
+import { v2 as cloudinary, UploadApiOptions } from 'cloudinary';
 
 // Configure Cloudinary
 cloudinary.config({
@@ -22,7 +22,7 @@ export interface UploadOptions {
   public_id?: string;
   transformation?: any[];
   tags?: string[];
-  resource_type?: string;
+  resource_type?: 'auto' | 'image' | 'video' | 'raw';
   quality?: string | number;
   format?: string;
 }
@@ -32,27 +32,37 @@ export interface UploadOptions {
  */
 export async function uploadToCloudinary(
   fileBuffer: Buffer,
-  options: UploadOptions = {}
+  options: UploadOptions = {},
+  categoryKey?: string
 ): Promise<CloudinaryUploadResult> {
-   const defaultOptions: UploadOptions = {
-    folder: 'peyton-portfolio',
+  // Create folder path based on category
+  const folderPath = categoryKey 
+    ? `peyton-portfolio/${categoryKey}` 
+    : 'peyton-portfolio';
+
+  const defaultOptions: UploadApiOptions = {
+    folder: folderPath,
     quality: 'auto:good',
-    format: 'auto',
     resource_type: 'auto',
     transformation: [
       {
         width: 2048,
         height: 2048,
         crop: 'limit',
-        quality: 'auto:good',
-        fetch_format: 'auto'
+        quality: 'auto:good'
       }
     ]
   };
 
+  // Merge options with proper typing
+  const finalOptions: UploadApiOptions = { 
+    ...defaultOptions, 
+    ...options 
+  };
+
   return new Promise((resolve, reject) => {
     const uploadStream = cloudinary.uploader.upload_stream(
-      defaultOptions,
+      finalOptions,
       (error, result) => {
         if (error) {
           console.error('Cloudinary upload error:', error);
@@ -63,7 +73,8 @@ export async function uploadToCloudinary(
             url: result.secure_url,
             size: `${Math.round(result.bytes / 1024)}KB`,
             format: result.format,
-            dimensions: `${result.width}x${result.height}`
+            dimensions: `${result.width}x${result.height}`,
+            folder: folderPath
           });
           resolve(result as CloudinaryUploadResult);
         } else {
@@ -142,7 +153,5 @@ export function getDisplayUrl(
     }
   ]);
 }
-
-
 
 export default cloudinary;

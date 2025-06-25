@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import NextImage from 'next/image'
 import { useState, useEffect, useCallback } from 'react'
 import { siteConfig } from '@/config/site'
+import { Image as ImageType } from '@/lib/types'
 
 // Client-safe thumbnail function
 function getClientThumbnailUrl(cloudinaryId: string, width: number, height: number): string {
@@ -19,6 +20,7 @@ interface ImageData {
   cloudinaryId: string
   title: string
   url: string
+  createdAt: string
 }
 
 interface ImageDimensions {
@@ -216,28 +218,6 @@ export default function About() {
                 statewide to create something beautiful together.
               </motion.p>
             </div>
-
-            {/* Stats */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.8 }}
-              viewport={{ once: true }}
-              className="grid grid-cols-3 gap-8 pt-8 border-t border-white/20"
-            >
-              <div className="text-center">
-                <div className="text-2xl font-bold text-primary-400">4+</div>
-                <div className="text-sm text-white/60">Years Experience</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-primary-400">500+</div>
-                <div className="text-sm text-white/60">Happy Clients</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-primary-400">1000+</div>
-                <div className="text-sm text-white/60">Photos Taken</div>
-              </div>
-            </motion.div>
           </motion.div>
 
           {/* Image Section */}
@@ -338,10 +318,12 @@ export default function About() {
               <div className="absolute -top-4 -right-4 w-24 h-24 bg-primary-500/20 rounded-full blur-xl" />
               <div className="absolute -bottom-4 -left-4 w-32 h-32 bg-secondary-500/20 rounded-full blur-xl" />
               
-              {/* Debug info */}
-              <div className="absolute -bottom-12 left-0 right-0 text-center text-xs text-white/40">
-                Phase: {transitionPhase} | Size: {containerDimensions.width}x{containerDimensions.height}
-              </div>
+              {/* Debug info - only show in development */}
+              {process.env.NODE_ENV === 'development' && (
+                <div className="absolute -bottom-12 left-0 right-0 text-center text-xs text-white/40">
+                  Phase: {transitionPhase} | Size: {containerDimensions.width}x{containerDimensions.height}
+                </div>
+              )}
             </div>
           </motion.div>
         </div>
