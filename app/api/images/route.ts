@@ -1,61 +1,52 @@
-// app/api/images/route.ts
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
 import { db } from '@/lib/db'
+import { NextRequest } from 'next/server'
+import { v2 as cloudinary } from 'cloudinary'
+import { authOptions } from '@/lib/auth'
+import { getServerSession } from 'next-auth'
 
-export async function GET(request: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
-    console.log('🖼️ Images API: GET request received')
-    
-    const { searchParams } = new URL(request.url)
-    const includePrivate = searchParams.get('includePrivate') === 'true'
-    const public_only = searchParams.get('public') === 'true'
-    
     const session = await getServerSession(authOptions)
-    const isAdmin = session?.user?.role === 'ADMIN'
-    
-    console.log('👤 Session:', { isAdmin, includePrivate, public_only })
-    
-    let whereClause = {}
-    
-    if (public_only) {
-      // For public API, only show images from public categories
-      whereClause = {
-        category: {
-          isPrivate: false
-        }
-      }
-    } else if (includePrivate && isAdmin) {
-      // Admin requesting all images
-      whereClause = {}
-    } else {
-      // Regular user or not admin
-      whereClause = {
-        category: {
-          isPrivate: false
-        }
-      }
+    if (!session || (session.user as any)?.role !== 'ADMIN') {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
     }
-    
-    const images = await db.image.findMany({
-      where: whereClause,
-      include: {
-        category: true
-      },
-      orderBy: [
-        { order: 'asc' },
-        { createdAt: 'desc' }
-      ]
+
+    const formData = await req.formData()
+    const file = formData.get('file') as File
+    const categoryId = formData.get('categoryId') as string
+
+    if (!file || !categoryId) {
+      return new Response(JSON.stringify({ error: 'Missing file or category ID' }), { status: 400 })
+    }
+
+    const arrayBuffer = await file.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
+
+    const uploadResult = await new Promise((resolve, reject) => {
+      cloudinary.uploader.upload_stream({ folder: categoryId }, (error, result) => {
+        if (error) reject(error)
+        else resolve(result)
+      }).end(buffer)
     })
 
-    console.log('🖼️ Found images:', images.length)
-    return NextResponse.json({ images })
-  } catch (error) {
-    console.error('❌ Images API error:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch images', details: error.message },
-      { status: 500 }
-    )
+    const result = uploadResult as any
+
+    const newImage = await db.image.create({
+      data: {
+        url: result.secure_url,
+        name: result.original_filename,
+        categoryId,
+        cloudinaryId: result.public_id
+      }
+    })
+
+    return new Response(JSON.stringify({ success: true, image: newImage }), { status: 200 })
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      console.error('Upload error:', error.message)
+    } else {
+      console.error('Unknown upload error:', error)
+    }
+    return new Response(JSON.stringify({ success: false }), { status: 500 })
   }
 }

@@ -50,7 +50,7 @@ export default function AdminDashboard({ children }: AdminDashboardProps) {
         const data = await response.json()
         setCategories(data.categories || [])
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Failed to fetch categories:', error)
     }
   }
@@ -62,7 +62,7 @@ export default function AdminDashboard({ children }: AdminDashboardProps) {
         const data = await response.json()
         setStats(data)
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Failed to fetch stats:', error)
     }
   }
@@ -80,7 +80,7 @@ export default function AdminDashboard({ children }: AdminDashboardProps) {
       })
       if (!response.ok) throw new Error('Failed to update category')
       await refreshDashboardData()
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Update category error:', error)
       throw error
     }
@@ -93,7 +93,7 @@ export default function AdminDashboard({ children }: AdminDashboardProps) {
       })
       if (!response.ok) throw new Error('Failed to delete category')
       await refreshDashboardData()
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Delete category error:', error)
       throw error
     }
@@ -113,7 +113,7 @@ export default function AdminDashboard({ children }: AdminDashboardProps) {
       await refreshDashboardData()
       const result = await response.json()
       return result.category
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Create category error:', error)
       throw error
     }
