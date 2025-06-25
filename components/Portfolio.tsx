@@ -18,10 +18,9 @@ function getClientThumbnailUrl(cloudinaryId: string, width: number, height: numb
 
 interface PortfolioProps {
   categories: Category[]
-  recentImages: any[]
 }
 
-export default function ModernPortfolio({ categories, recentImages }: PortfolioProps) {
+export default function ModernPortfolio({ categories }: PortfolioProps) {
   const [mounted, setMounted] = useState(false)
   const [categoriesList, setCategoriesList] = useState(categories)
   const { data: session } = useSession()

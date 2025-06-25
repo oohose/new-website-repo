@@ -36,6 +36,23 @@ export async function getCategories(includePrivate = false) {
             images: true,
             _count: {
               select: { images: true }
+            },
+            subcategories: {
+              include: {
+                images: true,
+                _count: {
+                  select: { images: true }
+                },
+                subcategories: {
+                  include: {
+                    images: true,
+                    _count: {
+                      select: { images: true }
+                    }
+                    // 👆 Repeat this pattern deeper if needed
+                  }
+                }
+              }
             }
           }
         }
@@ -49,6 +66,7 @@ export async function getCategories(includePrivate = false) {
     throw error
   }
 }
+
 
 
 export async function getCategoryByKey(key: string, includePrivate = false) {

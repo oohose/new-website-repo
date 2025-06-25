@@ -6,7 +6,16 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const { images }: { images: { id: string; public_id: string; url: string; categoryId: string }[] } = body
 
-    const createdImages = await db.image.createMany({ data: images })
+    const transformed = images.map(img => ({
+      id: img.id,
+      title: img.public_id,              
+      url: img.url,
+      categoryId: img.categoryId,
+      cloudinaryId: img.public_id
+    }))
+
+const createdImages = await db.image.createMany({ data: transformed })
+
 
     return new Response(JSON.stringify({ success: true, createdImages }), { status: 200 })
   } catch (error: unknown) {
