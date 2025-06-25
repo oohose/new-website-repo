@@ -34,10 +34,12 @@ export async function POST(req: NextRequest) {
     const newImage = await db.image.create({
       data: {
         url: result.secure_url,
+        title: result.original_filename, // ✅ this satisfies the schema
         categoryId,
         cloudinaryId: result.public_id
       }
     })
+
 
     return new Response(JSON.stringify({ success: true, image: newImage }), { status: 200 })
   } catch (error: unknown) {
