@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@/lib/db'
 import GalleryView from '@/components/gallery/GalleryView'
-
+import type { Category } from '@/lib/types'
 interface GalleryPageProps {
   params: { key: string }
 }
@@ -78,27 +78,44 @@ export default async function GalleryPage({ params }: GalleryPageProps) {
   }
 
   // Ensure category has required properties and convert dates to strings
-  const safeCategory = {
-    id: category.id || '',
-    key: category.key || params.key,
-    name: category.name || 'Untitled Gallery',
-    description: category.description || null,
-    isPrivate: Boolean(category.isPrivate),
-    images: Array.isArray(category.images) ? category.images.map(img => ({
-      ...img,
-      createdAt: img.createdAt.toISOString() // Convert Date to string
-    })) : [],
-    subcategories: Array.isArray(category.subcategories) ? category.subcategories.map(sub => ({
-      ...sub,
-      images: sub.images ? sub.images.map(img => ({
+  const safeCategory: Category = {
+  id: category.id,
+  key: category.key,
+  name: category.name || 'Untitled Gallery',
+  description: category.description ?? null,
+  isPrivate: Boolean(category.isPrivate),
+  parentId: category.parentId ?? null,
+  images: Array.isArray(category.images)
+    ? category.images.map(img => ({
         ...img,
-        createdAt: img.createdAt.toISOString() // Convert Date to string
-      })) : []
-    })) : [],
-    _count: {
-      images: category._count?.images || 0
-    }
+        createdAt: img.createdAt.toISOString()
+      }))
+    : [],
+  subcategories: Array.isArray(category.subcategories)
+    ? category.subcategories.map(sub => ({
+        id: sub.id,
+        key: sub.key,
+        name: sub.name,
+        description: sub.description ?? null,
+        isPrivate: Boolean(sub.isPrivate),
+        parentId: sub.parentId ?? null,
+        images: Array.isArray(sub.images)
+          ? sub.images.map(img => ({
+              ...img,
+              createdAt: img.createdAt.toISOString()
+            }))
+          : [],
+        subcategories: [],
+        _count: {
+          images: sub._count?.images || 0
+        }
+      }))
+    : [],
+  _count: {
+    images: category._count?.images || 0
   }
+}
+
 
   return <GalleryView category={safeCategory} isAdmin={isAdmin} />
 }
