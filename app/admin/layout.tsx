@@ -1,10 +1,10 @@
-import '@/app/globals.css'
+import './globals.css'
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import { Providers } from '@/app/providers'
 import { Toaster } from 'react-hot-toast'
 import { siteConfig } from '@/config/site'
-import Navigation from '@/components/Navigation'
+import ModernNavigation from '@/components/Navigation' // ✅ Add this import
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -47,7 +47,7 @@ export default function RootLayout({
     <html lang="en" className={siteConfig.theme.darkMode ? "dark" : ""}>
       <body className={inter.className}>
         <Providers>
-          <Navigation />
+          <ModernNavigation /> {/* ✅ Add the navigation here */}
           {children}
           <Toaster
             position="top-center"

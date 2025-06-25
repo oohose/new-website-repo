@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useSession, signOut } from 'next-auth/react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Menu, X, User, LogOut, Settings } from 'lucide-react'
+import { siteConfig } from '@/config/site'
 
 export default function ModernNavigation() {
   const [isOpen, setIsOpen] = useState(false)
@@ -27,7 +28,7 @@ export default function ModernNavigation() {
     { href: '/contact', label: 'Contact' },
   ]
 
-  return (
+   return (
     <>
       <nav className={`fixed top-0 w-full z-50 transition-all duration-300 ${
         isScrolled 
@@ -36,7 +37,7 @@ export default function ModernNavigation() {
       }`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16 lg:h-20">
-            {/* Logo */}
+            {/* Logo - Fixed to use siteConfig */}
             <Link href="/" className="group">
               <motion.div
                 whileHover={{ scale: 1.05 }}
@@ -45,7 +46,7 @@ export default function ModernNavigation() {
                   isScrolled ? 'text-gray-900' : 'text-white'
                 }`}
               >
-                Peyton Snipes
+                {siteConfig.photographer.name} {/* ✅ Use config instead of hard-coded name */}
               </motion.div>
             </Link>
 
