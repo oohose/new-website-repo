@@ -21,8 +21,15 @@ if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = db
 export async function getCategories(includePrivate = false) {
   try {
     return await db.category.findMany({
-      where: includePrivate ? {} : { isPrivate: false },
+      where: {
+        parentId: null,
+        ...(includePrivate ? {} : { isPrivate: false }),
+      },
       include: {
+        images: true,
+        _count: {
+          select: { images: true }
+        },
         subcategories: {
           where: includePrivate ? {} : { isPrivate: false },
           include: {
@@ -31,10 +38,6 @@ export async function getCategories(includePrivate = false) {
               select: { images: true }
             }
           }
-        },
-        images: true,
-        _count: {
-          select: { images: true }
         }
       },
       orderBy: {
@@ -46,6 +49,7 @@ export async function getCategories(includePrivate = false) {
     throw error
   }
 }
+
 
 export async function getCategoryByKey(key: string, includePrivate = false) {
   try {

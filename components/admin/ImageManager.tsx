@@ -23,6 +23,7 @@ import { Category, Image as ImageType } from '@/lib/types'
 
 interface ImageManagerProps {
   categories: Category[]
+    refresh?: () => Promise<void>
 }
 
 interface ImageWithCategory extends ImageType {
@@ -118,7 +119,7 @@ function BulkDeleteModal({ isOpen, onClose, selectedImages, onConfirm, isDeletin
   )
 }
 
-export default function ImageManager({ categories }: ImageManagerProps) {
+export default function ImageManager({ categories, refresh }: ImageManagerProps) {
   const [images, setImages] = useState<ImageWithCategory[]>([])
   const [filteredImages, setFilteredImages] = useState<ImageWithCategory[]>([])
   const [loading, setLoading] = useState(true)

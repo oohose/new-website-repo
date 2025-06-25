@@ -1,9 +1,11 @@
+// ✅ Updated ImageDeleteButton.tsx with router.refresh for Cloudinary sync
 'use client'
 
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Trash2, AlertTriangle, X } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { useRouter } from 'next/navigation'
 
 interface ImageDeleteButtonProps {
   imageId: string
@@ -95,10 +97,10 @@ export default function ImageDeleteButton({
 }: ImageDeleteButtonProps) {
   const [showModal, setShowModal] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const router = useRouter()
 
   const handleDelete = async () => {
     setIsDeleting(true)
-    
     try {
       const response = await fetch(`/api/images/${imageId}`, {
         method: 'DELETE'
@@ -108,6 +110,7 @@ export default function ImageDeleteButton({
         toast.success('Image deleted successfully')
         onDelete()
         setShowModal(false)
+        router.refresh() // ✅ Refresh server-rendered content
       } else {
         const error = await response.json()
         toast.error(error.error || 'Failed to delete image')

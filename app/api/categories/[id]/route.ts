@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { deleteFromCloudinary } from '@/lib/cloudinary'
+import { v2 as cloudinary } from 'cloudinary'
+
 
 export async function DELETE(
   request: NextRequest,
@@ -56,6 +58,15 @@ export async function DELETE(
     await db.category.delete({
       where: { id: categoryId }
     })
+
+    // Delete Cloudinary folder
+    try {
+      await cloudinary.api.delete_folder(`peyton-portfolio/${category.key}`)
+
+      console.log(`✅ Deleted Cloudinary folder: ${category.key}`)
+    } catch (err) {
+      console.warn(`⚠️ Could not delete Cloudinary folder: ${category.key}`, err)
+    }
 
     console.log(`✅ Deleted category: ${category.name} with ${allImages.length} images`)
 

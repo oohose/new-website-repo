@@ -4,7 +4,11 @@ import { useState } from 'react'
 import { RefreshCw, AlertCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-export default function AdminImageSync() {
+interface AdminImageSyncProps {
+  refresh?: () => Promise<void>
+}
+
+export default function AdminImageSync({ refresh }: AdminImageSyncProps) {
   const [isSyncing, setIsSyncing] = useState(false)
 
   const handleSync = async () => {

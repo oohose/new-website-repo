@@ -152,7 +152,10 @@ function CategoryPicker({ categories, selectedCategoryId, onCategorySelect }: Ca
   return (
     <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 max-h-64 overflow-y-auto">
       <h4 className="text-white font-medium mb-3">Select Category</h4>
-      {categories.filter(cat => !cat.parentId).map(category => renderCategory(category))}
+      {categories
+      .filter(cat => !cat.parentId) // top-level only
+      .sort((a, b) => a.name.localeCompare(b.name)) // optional sorting
+      .map(category => renderCategory(category))}
     </div>
   )
 }
