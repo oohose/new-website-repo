@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Image from 'next/image'
 import Link from 'next/link'
-import { ArrowLeft, X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ArrowLeft, X, ChevronLeft, ChevronRight, Settings } from 'lucide-react'
 
 interface ImageType {
   id: string
@@ -62,6 +62,24 @@ export default function DarkElegantGalleryView({ category, isAdmin }: DarkElegan
 
     // Default - original with quality optimization
     return `https://res.cloudinary.com/${cloudName}/image/upload/q_auto,f_auto/${image.cloudinaryId}`
+  }
+
+  // Generate gradient colors for subcategories (same as Portfolio.tsx)
+  const generateGradient = (name: string) => {
+    const gradients = [
+      'from-rose-400 to-pink-600',
+      'from-blue-400 to-blue-600', 
+      'from-emerald-400 to-teal-600',
+      'from-amber-400 to-orange-600',
+      'from-violet-400 to-purple-600',
+      'from-cyan-400 to-blue-600',
+      'from-pink-400 to-rose-600',
+      'from-indigo-400 to-purple-600',
+      'from-green-400 to-emerald-600',
+      'from-yellow-400 to-amber-600'
+    ]
+    const hash = name.split('').reduce((a, b) => a + b.charCodeAt(0), 0)
+    return gradients[hash % gradients.length]
   }
 
   const headerImage = category.images.find(img => img.isHeader)
@@ -170,56 +188,37 @@ export default function DarkElegantGalleryView({ category, isAdmin }: DarkElegan
               </Link>
             </motion.div>
 
-            {/* Main Content */}
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.2 }}
-              className="space-y-8"
-            >
-              {/* Category Title */}
-              <div className="space-y-6">
-                <h1 className="text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-light text-white tracking-tight leading-none">
-                  {category.name}
-                </h1>
-                
-                {/* Decorative Line */}
-                <div className="w-24 h-px bg-gradient-to-r from-transparent via-white/50 to-transparent mx-auto" />
-              </div>
-
-              {/* Description */}
-              {category.description && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 0.8, delay: 0.5 }}
-                  className="max-w-2xl mx-auto"
-                >
-                  <div className="border border-white/20 rounded-lg p-6 backdrop-blur-sm bg-white/5">
-                    <p className="text-lg md:text-xl text-white/90 leading-relaxed font-light">
-                      {category.description}
-                    </p>
-                  </div>
-                </motion.div>
-              )}
-
-              {/* Stats */}
+            {/* ✅ ISSUE #1 FIX: Make entire header clickable */}
+            {isAdmin && (
               <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.8, delay: 0.7 }}
-                className="flex items-center justify-center space-x-8 text-white/60"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.6 }}
+                className="absolute top-0 right-0 -mt-20"
               >
-                <span className="font-light tracking-wide">
-                  {category._count.images} {category._count.images === 1 ? 'image' : 'images'} in this collection
-                </span>
-                {isAdmin && category.isPrivate && (
-                  <span className="px-4 py-2 bg-red-500/20 text-red-300 rounded-full text-sm border border-red-500/30">
-                    Private Gallery
-                  </span>
-                )}
+                <Link
+                  href="/admin"
+                  className="group inline-flex items-center space-x-3 text-white/70 hover:text-white transition-colors"
+                >
+                  <span className="font-light tracking-wide">Edit Category</span>
+                  <div className="w-12 h-12 rounded-full border border-white/20 flex items-center justify-center group-hover:border-white/40 transition-colors">
+                    <Settings className="w-5 h-5 group-hover:rotate-45 transition-transform duration-300" />
+                  </div>
+                </Link>
               </motion.div>
-            </motion.div>
+            )}
+
+            {/* Main Content - Make entire header clickable for admin */}
+            <div className={isAdmin ? "cursor-pointer" : ""}>
+              {isAdmin && (
+                <Link href="/admin" className="block">
+                  <div className="p-8 rounded-lg hover:bg-white/5 transition-all duration-300 border border-transparent hover:border-white/10">
+                    <HeaderContent category={category} isAdmin={isAdmin} />
+                  </div>
+                </Link>
+              )}
+              {!isAdmin && <HeaderContent category={category} isAdmin={isAdmin} />}
+            </div>
           </div>
 
           {/* Scroll Indicator */}
@@ -304,7 +303,7 @@ export default function DarkElegantGalleryView({ category, isAdmin }: DarkElegan
               </div>
             )}
 
-            {/* Subcategories */}
+            {/* ✅ ISSUE #2 FIX: Subcategories with same styling + "More from this collection" */}
             {category.subcategories.length > 0 && (
               <motion.div
                 initial={{ opacity: 0, y: 30 }}
@@ -315,36 +314,92 @@ export default function DarkElegantGalleryView({ category, isAdmin }: DarkElegan
               >
                 <div className="text-center mb-16">
                   <h2 className="text-3xl md:text-4xl font-light text-white mb-4 tracking-tight">
-                    Related Galleries
+                    More from this collection
                   </h2>
                   <div className="w-16 h-px bg-gradient-to-r from-transparent via-white/50 to-transparent mx-auto"></div>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                  {category.subcategories.map((subcat) => (
-                    <Link key={subcat.id} href={`/gallery/${subcat.key}`}>
-                      <div className="group bg-gray-800 border border-gray-700/50 rounded-lg overflow-hidden hover:border-gray-600 transition-all duration-300 hover:transform hover:scale-105">
-                        {subcat.images[0] && (
-                          <div className="aspect-[4/3] relative overflow-hidden">
-                            <Image
-                              src={getOptimizedUrl(subcat.images[0], 400)}
-                              alt={subcat.name}
-                              fill
-                              className="object-cover group-hover:scale-110 transition-transform duration-700"
-                            />
+                {/* ✅ Updated to use same styling as Portfolio.tsx */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
+                  {category.subcategories.map((subcategory, index) => {
+                    const recentImage = subcategory.images?.[0]
+                    const gradientClass = generateGradient(subcategory.name)
+
+                    return (
+                      <motion.div
+                        key={subcategory.id}
+                        initial={{ opacity: 0, y: 20 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.6, delay: index * 0.1 }}
+                        viewport={{ once: true }}
+                        className="group"
+                      >
+                        <Link href={`/gallery/${subcategory.key}`} className="block">
+                          {/* Same styling as Portfolio cards */}
+                          <div className="relative aspect-[5/4] overflow-hidden bg-gray-700 mb-4 rounded-xl shadow-lg">
+                            {/* Background Image or Gradient */}
+                            {recentImage ? (
+                              <Image
+                                src={getOptimizedUrl(recentImage, 600)}
+                                alt={subcategory.name}
+                                fill
+                                className="object-cover transition-all duration-700 group-hover:scale-105"
+                                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                              />
+                            ) : (
+                              <div className={`w-full h-full bg-gradient-to-br ${gradientClass}`} />
+                            )}
+                            
+                            {/* Dark Overlay */}
+                            <div className="absolute inset-0 bg-black/70 group-hover:bg-black/50 transition-opacity duration-500" />
+                            
+                            {/* Privacy indicator */}
+                            {isAdmin && subcategory.isPrivate && (
+                              <div className="absolute top-3 right-3 px-3 py-1 bg-red-500/90 backdrop-blur-sm text-white text-xs rounded-full">
+                                Private
+                              </div>
+                            )}
+
+                            {/* Category Name */}
+                            <div className="absolute inset-0 flex flex-col justify-center items-center text-center p-6">
+                              <h3 className="text-2xl md:text-3xl font-light text-white drop-shadow-lg leading-tight mb-2">
+                                {subcategory.name}
+                              </h3>
+                              
+                              {/* Hover Button */}
+                              <motion.div
+                                initial={{ opacity: 0, y: 10 }}
+                                className="bg-white/20 backdrop-blur-sm rounded-full px-4 py-2 border border-white/30 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                              >
+                                <span className="text-white text-sm font-light">View Gallery →</span>
+                              </motion.div>
+                            </div>
+
+                            {/* Bottom Info */}
+                            <div className="absolute bottom-4 left-4 right-4 opacity-100 group-hover:opacity-0 transition-opacity duration-300">
+                              <div className="flex items-center justify-between text-white/80">
+                                <span className="text-sm">
+                                  {subcategory._count?.images || 0} {(subcategory._count?.images || 0) === 1 ? 'image' : 'images'}
+                                </span>
+                                <span className="text-sm">
+                                  Tap to view →
+                                </span>
+                              </div>
+                            </div>
                           </div>
-                        )}
-                        <div className="p-6">
-                          <h3 className="text-lg font-light text-white mb-2 group-hover:text-white/80 transition-colors">
-                            {subcat.name}
-                          </h3>
-                          <p className="text-white/60 text-sm">
-                            {subcat._count.images} {subcat._count.images === 1 ? 'image' : 'images'}
-                          </p>
-                        </div>
-                      </div>
-                    </Link>
-                  ))}
+
+                          {/* Content Below Image */}
+                          <div className="space-y-1">          
+                            {subcategory.description && (
+                              <p className="text-gray-400 text-xs leading-relaxed line-clamp-1 text-center">
+                                {subcategory.description}
+                              </p>
+                            )}
+                          </div>
+                        </Link>
+                      </motion.div>
+                    )
+                  })}
                 </div>
               </motion.div>
             )}
@@ -429,5 +484,60 @@ export default function DarkElegantGalleryView({ category, isAdmin }: DarkElegan
         )}
       </AnimatePresence>
     </>
+  )
+}
+
+// Separate component for header content to avoid duplication
+function HeaderContent({ category, isAdmin }: { category: Category, isAdmin: boolean }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 30 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.8, delay: 0.2 }}
+      className="space-y-8"
+    >
+      {/* Category Title */}
+      <div className="space-y-6">
+        <h1 className="text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-light text-white tracking-tight leading-none">
+          {category.name}
+        </h1>
+        
+        {/* Decorative Line */}
+        <div className="w-24 h-px bg-gradient-to-r from-transparent via-white/50 to-transparent mx-auto" />
+      </div>
+
+      {/* Description */}
+      {category.description && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.8, delay: 0.5 }}
+          className="max-w-2xl mx-auto"
+        >
+          <div className="border border-white/20 rounded-lg p-6 backdrop-blur-sm bg-white/5">
+            <p className="text-lg md:text-xl text-white/90 leading-relaxed font-light">
+              {category.description}
+            </p>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Stats */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8, delay: 0.7 }}
+        className="flex items-center justify-center space-x-8 text-white/60"
+      >
+        <span className="font-light tracking-wide">
+          {category._count.images} {category._count.images === 1 ? 'image' : 'images'} in this collection
+        </span>
+        {isAdmin && category.isPrivate && (
+          <span className="px-4 py-2 bg-red-500/20 text-red-300 rounded-full text-sm border border-red-500/30">
+            Private Gallery
+          </span>
+        )}
+      </motion.div>
+    </motion.div>
   )
 }

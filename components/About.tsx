@@ -47,11 +47,12 @@ export default function About() {
 
   const fetchImages = async () => {
     try {
-      const response = await fetch('/api/images?public=true')
+      // ✅ Updated to fetch images including subcategories
+      const response = await fetch('/api/images?public=true&includeSubcategories=true')
       if (response.ok) {
         const data = await response.json()
         const shuffled = data.images.sort(() => 0.5 - Math.random())
-        setAboutImages(shuffled.slice(0, 6))
+        setAboutImages(shuffled.slice(0, 8)) // ✅ Increased from 6 to 8 since we have more images now
       } else {
         console.error('Failed to fetch images')
         setAboutImages([])
@@ -321,7 +322,7 @@ export default function About() {
               {/* Debug info - only show in development */}
               {process.env.NODE_ENV === 'development' && (
                 <div className="absolute -bottom-12 left-0 right-0 text-center text-xs text-white/40">
-                  Phase: {transitionPhase} | Size: {containerDimensions.width}x{containerDimensions.height}
+                  Phase: {transitionPhase} | Size: {containerDimensions.width}x{containerDimensions.height} | Total: {aboutImages.length} images
                 </div>
               )}
             </div>
