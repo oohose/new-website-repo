@@ -34,7 +34,6 @@ export async function POST(req: NextRequest) {
     const newImage = await db.image.create({
       data: {
         url: result.secure_url,
-        name: result.original_filename,
         categoryId,
         cloudinaryId: result.public_id
       }
