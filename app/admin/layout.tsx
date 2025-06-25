@@ -1,68 +1,79 @@
-'use client'
+import './globals.css'
+import type { Metadata } from 'next'
+import { Inter } from 'next/font/google'
+import { Providers } from '@/app/providers'
+import { Toaster } from 'react-hot-toast'
+import { siteConfig } from '@/config/site'
+import Navigation from '@/components/Navigation'
 
-import { useSession } from 'next-auth/react'
-import { useRouter, usePathname } from 'next/navigation'
-import { useEffect } from 'react'
-import { motion } from 'framer-motion'
-import { Shield } from 'lucide-react'
+const inter = Inter({ subsets: ['latin'] })
 
-export default function AdminLayout({
+export const metadata: Metadata = {
+  title: {
+    default: siteConfig.name,
+    template: `%s | ${siteConfig.name}`
+  },
+  description: siteConfig.description,
+  keywords: siteConfig.seo.keywords,
+  authors: [{ name: siteConfig.photographer.name }],
+  creator: siteConfig.photographer.name,
+  openGraph: {
+    type: 'website',
+    locale: 'en_US',
+    url: process.env.NEXTAUTH_URL,
+    title: siteConfig.name,
+    description: siteConfig.description,
+    siteName: siteConfig.name,
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
+  },
+}
+
+export default function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const { data: session, status } = useSession()
-  const router = useRouter()
-  const pathname = usePathname()
-
-  useEffect(() => {
-    if (status === 'loading') return
-
-    // Don't redirect if we're on the signin page
-    if (pathname === '/admin/signin') return
-
-    if (!session) {
-      router.push('/admin/signin')
-      return
-    }
-
-    const userRole = (session.user as any)?.role
-    if (userRole !== 'ADMIN') {
-      router.push('/admin/signin')
-      return
-    }
-  }, [session, status, router, pathname])
-
-  if (status === 'loading') {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mb-4 mx-auto animate-pulse">
-            <Shield className="w-8 h-8 text-white" />
-          </div>
-          <p className="text-white text-lg">Verifying admin access...</p>
-        </div>
-      </div>
-    )
-  }
-
-  // Allow signin page to render without auth check
-  if (pathname === '/admin/signin') {
-    return <>{children}</>
-  }
-
-  // Require auth for other admin pages
-  if (!session || (session.user as any)?.role !== 'ADMIN') {
-    return null
-  }
-
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.3 }}
-    >
-      {children}
-    </motion.div>
+    <html lang="en" className={siteConfig.theme.darkMode ? "dark" : ""}>
+      <body className={inter.className}>
+        <Providers>
+          <Navigation />
+          {children}
+          <Toaster
+            position="top-center"
+            toastOptions={{
+              duration: 4000,
+              style: {
+                background: '#1a1a1a',
+                color: '#fff',
+                border: '1px solid #333',
+              },
+              success: {
+                iconTheme: {
+                  primary: '#14b8a6',
+                  secondary: '#fff',
+                },
+              },
+              error: {
+                iconTheme: {
+                  primary: '#ef4444',
+                  secondary: '#fff',
+                },
+              },
+            }}
+          />
+        </Providers>
+      </body>
+    </html>
   )
 }
