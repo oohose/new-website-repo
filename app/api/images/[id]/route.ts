@@ -2,7 +2,129 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { deleteFromCloudinary } from '@/lib/cloudinary'
+import { PrismaClient } from '@prisma/client'
+import { v2 as cloudinary } from 'cloudinary'
+
+// If none of the above work, use this direct instantiation:
+const prisma = new PrismaClient()
+
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+})
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user || (session.user as any).role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const image = await prisma.image.findUnique({
+      where: { id: params.id },
+      include: {
+        category: true
+      }
+    })
+
+    if (!image) {
+      return NextResponse.json({ error: 'Image not found' }, { status: 404 })
+    }
+
+    return NextResponse.json({ image })
+  } catch (error) {
+    console.error('Error fetching image:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user || (session.user as any).role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const body = await request.json()
+    const { title, description, categoryId, isHeader, displayOrder } = body
+
+    // Validate required fields
+    if (!title?.trim()) {
+      return NextResponse.json({ error: 'Title is required' }, { status: 400 })
+    }
+
+    // Check if image exists
+    const existingImage = await prisma.image.findUnique({
+      where: { id: params.id },
+      include: { category: true }
+    })
+
+    if (!existingImage) {
+      return NextResponse.json({ error: 'Image not found' }, { status: 404 })
+    }
+
+    // Validate category if provided
+    if (categoryId && categoryId !== existingImage.categoryId) {
+      const categoryExists = await prisma.category.findUnique({
+        where: { id: categoryId }
+      })
+      if (!categoryExists) {
+        return NextResponse.json({ error: 'Category not found' }, { status: 400 })
+      }
+    }
+
+    // Prepare update data - only include fields that exist in your schema
+    const updateData: any = {
+      title: title.trim(),
+      categoryId: categoryId || existingImage.categoryId,
+      updatedAt: new Date()
+    }
+
+    // Only include optional fields if they exist in your schema
+    if (description !== undefined) {
+      updateData.description = description?.trim() || null
+    }
+    
+    if (isHeader !== undefined) {
+      updateData.isHeader = Boolean(isHeader)
+    }
+    
+    if (displayOrder !== undefined && displayOrder !== null) {
+      updateData.displayOrder = parseInt(displayOrder)
+    }
+
+    // Update image
+    const updatedImage = await prisma.image.update({
+      where: { id: params.id },
+      data: updateData,
+      include: {
+        category: true
+      }
+    })
+
+    return NextResponse.json({ 
+      message: 'Image updated successfully',
+      image: updatedImage 
+    })
+  } catch (error) {
+    console.error('Error updating image:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
 
 export async function DELETE(
   request: NextRequest,
@@ -10,69 +132,41 @@ export async function DELETE(
 ) {
   try {
     const session = await getServerSession(authOptions)
-    
-    if (!session || (session.user as any)?.role !== 'ADMIN') {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+    if (!session?.user || (session.user as any).role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const imageId = params.id
-
-    if (!imageId) {
-      return NextResponse.json(
-        { error: 'Image ID is required' },
-        { status: 400 }
-      )
-    }
-
-    // Find the image to get cloudinary ID
-    const image = await db.image.findUnique({
-      where: { id: imageId },
-      select: {
-        id: true,
-        cloudinaryId: true,
-        title: true
-      }
+    // Get image details
+    const image = await prisma.image.findUnique({
+      where: { id: params.id }
     })
 
     if (!image) {
-      return NextResponse.json(
-        { error: 'Image not found' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: 'Image not found' }, { status: 404 })
     }
 
-    // Delete from Cloudinary first
     try {
-      await deleteFromCloudinary(image.cloudinaryId)
-      console.log(`✅ Deleted image from Cloudinary: ${image.cloudinaryId}`)
+      // Delete from Cloudinary
+      if (image.cloudinaryId) {
+        await cloudinary.uploader.destroy(image.cloudinaryId)
+      }
     } catch (cloudinaryError) {
-      console.error('Cloudinary delete error:', cloudinaryError)
+      console.error('Error deleting from Cloudinary:', cloudinaryError)
       // Continue with database deletion even if Cloudinary fails
-      // This prevents orphaned database records
     }
 
     // Delete from database
-    await db.image.delete({
-      where: { id: imageId }
+    await prisma.image.delete({
+      where: { id: params.id }
     })
 
-    console.log(`✅ Deleted image from database: ${image.title}`)
-
-    return NextResponse.json({
-      success: true,
+    return NextResponse.json({ 
       message: 'Image deleted successfully'
     })
-
   } catch (error) {
-    console.error('Image delete error:', error)
+    console.error('Error deleting image:', error)
     return NextResponse.json(
-      { 
-        error: 'Failed to delete image',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
+      { error: 'Internal server error' },
       { status: 500 }
     )
   }

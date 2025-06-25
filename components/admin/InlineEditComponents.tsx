@@ -10,7 +10,7 @@ interface CategoryManagerProps {
   categories: Category[]
   onUpdate: (id: string, data: Partial<Category>) => Promise<void>
   onDelete: (id: string) => Promise<void>
-  onCreate: (data: Partial<Category>) => Promise<void>
+  onCreate: (data: Partial<Category>) => Promise<Category>
 }
 
 interface DeleteModalProps {
@@ -153,12 +153,19 @@ export function CategoryManager({
   }
 
   const handleSave = async (id: string | null, data: Partial<Category>) => {
-    if (id) {
-      await onUpdate(id, data)
-    } else {
-      await onCreate(data)
+    try {
+      if (id) {
+        await onUpdate(id, data)
+        toast.success('Category updated successfully!')
+      } else {
+        await onCreate(data)
+        toast.success('Category created successfully!')
+      }
+      setEditModalState({ isOpen: false, category: null })
+    } catch (error) {
+      toast.error(id ? 'Failed to update category' : 'Failed to create category')
+      console.error('Error saving category:', error)
     }
-    setEditModalState({ isOpen: false, category: null })
   }
 
   const handleCloseModal = () => {
@@ -172,7 +179,7 @@ export function CategoryManager({
           <h3 className="text-xl font-semibold text-white">Category Manager</h3>
           <button
             onClick={handleCreate}
-            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
           >
             <Plus className="w-4 h-4" />
             <span>Add Category</span>
@@ -192,9 +199,8 @@ export function CategoryManager({
                 <CategoryCard
                   key={category.id}
                   category={category}
-                  onUpdate={onUpdate}
-                  onDelete={handleDeleteClick}
                   onEdit={handleEdit}
+                  onDelete={handleDeleteClick}
                 />
               ))}
             </div>
@@ -233,76 +239,75 @@ export function CategoryManager({
 
 interface CategoryCardProps {
   category: Category
-  onUpdate: (id: string, data: Partial<Category>) => Promise<void>
-  onDelete: (category: Category) => void
   onEdit: (category: Category) => void
+  onDelete: (category: Category) => void
 }
 
-function CategoryCard({ category, onUpdate, onDelete, onEdit }: CategoryCardProps) {
-  const handleUpdate = async (field: string, value: any) => {
-    await onUpdate(category.id, { [field]: value })
-  }
-
-  const totalImages = (category._count?.images || 0) + 
-    (category.subcategories?.reduce((sum, sub) => sum + (sub._count?.images || 0), 0) || 0)
-
+function CategoryCard({ category, onEdit, onDelete }: CategoryCardProps) {
   return (
-    <div className="bg-gray-600 rounded p-4 space-y-3 group hover:bg-gray-550 transition-colors">
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <h5 className="font-medium text-white">{category.name}</h5>
-          <p className="text-gray-300 text-sm mt-1">
-            {category.description || 'No description'}
-          </p>
-        </div>
-        
-        <div className="flex items-center space-x-2">
-          {category.isPrivate && (
-            <EyeOff className="w-4 h-4 text-red-400" />
-          )}
+    <div className="bg-gray-700/50 rounded-lg border border-gray-600 hover:border-gray-500 transition-all duration-200">
+      <div className="p-4">
+        {/* Header Row - Title and Privacy */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center space-x-3 flex-1 min-w-0">
+            <h3 className="text-white font-medium text-lg truncate">
+              {category.name}
+            </h3>
+            {/* ✅ Private indicator next to title */}
+            {category.isPrivate && (
+              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-500/20 text-red-300 border border-red-500/30 flex-shrink-0">
+                <EyeOff className="w-3 h-3 mr-1" />
+                Private
+              </span>
+            )}
+          </div>
           
-          <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          {/* ✅ Always visible action buttons */}
+          <div className="flex items-center space-x-2 flex-shrink-0">
             <button
               onClick={() => onEdit(category)}
-              className="p-1 text-blue-400 hover:text-blue-300 rounded"
+              className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-blue-300 bg-blue-600/20 border border-blue-500/30 rounded-md hover:bg-blue-600/30 hover:border-blue-500/50 transition-colors"
             >
-              <Edit2 className="w-3 h-3" />
+              <Edit2 className="w-4 h-4 mr-1" />
+              Edit
             </button>
-            
             <button
               onClick={() => onDelete(category)}
-              className="p-1 text-red-400 hover:text-red-300 rounded"
+              className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-red-300 bg-red-600/20 border border-red-500/30 rounded-md hover:bg-red-600/30 hover:border-red-500/50 transition-colors"
             >
-              <Trash2 className="w-3 h-3" />
+              <Trash2 className="w-4 h-4 mr-1" />
+              Delete
             </button>
           </div>
         </div>
-      </div>
-      
-      <div className="flex items-center justify-between text-sm">
-        <span className="text-gray-400">
-          {totalImages} total photos
-        </span>
-        
-        <label className="flex items-center space-x-2">
-          <input
-            type="checkbox"
-            checked={category.isPrivate}
-            onChange={async (e) => await handleUpdate('isPrivate', e.target.checked)}
-            className="form-checkbox text-blue-500"
-          />
-          <span className="text-gray-300">Private</span>
-        </label>
-      </div>
-      
-      <div className="text-xs text-gray-500">
-        URL: /gallery/{category.key}
+
+        {/* Details Row */}
+        <div className="space-y-2">
+          {category.description && (
+            <p className="text-gray-300 text-sm line-clamp-2">
+              {category.description}
+            </p>
+          )}
+          
+          <div className="flex items-center justify-between text-sm text-gray-400">
+            <div className="flex items-center space-x-4">
+              <span>Key: <code className="text-xs bg-gray-800 px-1 py-0.5 rounded">{category.key}</code></span>
+              <span>{category._count?.images || 0} images</span>
+              {category.subcategories && category.subcategories.length > 0 && (
+                <span>{category.subcategories.length} subcategories</span>
+              )}
+            </div>
+            <span className="text-xs">
+              {category.createdAt ? new Date(category.createdAt).toLocaleDateString() : 'Unknown date'}
+            </span>
+          </div>
+        </div>
       </div>
     </div>
   )
 }
 
-// Category Edit Modal (reusing from previous component)
+// Category Edit Modal
 interface CategoryEditModalProps {
   isOpen: boolean
   onClose: () => void
@@ -320,6 +325,7 @@ function CategoryEditModal({ isOpen, onClose, category, categories, onSave }: Ca
     parentId: ''
   })
   const [isLoading, setIsLoading] = useState(false)
+  const [errors, setErrors] = useState<Record<string, string>>({})
 
   useEffect(() => {
     if (category) {
@@ -339,10 +345,29 @@ function CategoryEditModal({ isOpen, onClose, category, categories, onSave }: Ca
         parentId: ''
       })
     }
+    setErrors({})
   }, [category])
+
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {}
+
+    if (!formData.name.trim()) {
+      newErrors.name = 'Category name is required'
+    }
+
+    if (formData.key && !/^[a-z0-9-]+$/.test(formData.key)) {
+      newErrors.key = 'Key can only contain lowercase letters, numbers, and hyphens'
+    }
+
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    if (!validateForm()) return
+    
     setIsLoading(true)
 
     try {
@@ -351,14 +376,27 @@ function CategoryEditModal({ isOpen, onClose, category, categories, onSave }: Ca
         parentId: formData.parentId || null,
         description: formData.description || null
       })
-
-      toast.success(category ? 'Category updated successfully!' : 'Category created successfully!')
       onClose()
     } catch (error) {
       console.error('Error saving category:', error)
-      toast.error('Failed to save category')
+      // Error handling is done in the parent component
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleInputChange = (field: string, value: string | boolean) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }))
+    
+    // Clear error when user starts typing
+    if (errors[field]) {
+      setErrors(prev => ({
+        ...prev,
+        [field]: ''
+      }))
     }
   }
 
@@ -374,7 +412,7 @@ function CategoryEditModal({ isOpen, onClose, category, categories, onSave }: Ca
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        className="bg-gray-800 rounded-lg border border-gray-700 shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+        className="bg-gray-800 rounded-2xl border border-gray-700 shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
       >
         <div className="flex items-center justify-between p-6 border-b border-gray-700">
           <h3 className="text-xl font-semibold text-white">
@@ -390,40 +428,60 @@ function CategoryEditModal({ isOpen, onClose, category, categories, onSave }: Ca
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           <div>
-            <label className="block text-sm font-medium text-white mb-2">
+            <label className="block text-sm font-medium text-gray-300 mb-2">
               Category Name *
             </label>
             <input
               type="text"
               required
               value={formData.name}
-              onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-              className="form-input"
+              onChange={(e) => handleInputChange('name', e.target.value)}
+              className={`w-full px-3 py-2 bg-gray-700 border rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 ${
+                errors.name 
+                  ? 'border-red-500 focus:ring-red-500' 
+                  : 'border-gray-600 focus:ring-blue-500'
+              }`}
               placeholder="e.g., Wedding Photography"
+              disabled={isLoading}
             />
+            {errors.name && (
+              <p className="mt-1 text-sm text-red-400">{errors.name}</p>
+            )}
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-white mb-2">
+            <label className="block text-sm font-medium text-gray-300 mb-2">
               URL Key
             </label>
             <input
               type="text"
               value={formData.key}
-              onChange={(e) => setFormData(prev => ({ ...prev, key: e.target.value }))}
-              className="form-input"
+              onChange={(e) => handleInputChange('key', e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+              className={`w-full px-3 py-2 bg-gray-700 border rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 ${
+                errors.key 
+                  ? 'border-red-500 focus:ring-red-500' 
+                  : 'border-gray-600 focus:ring-blue-500'
+              }`}
               placeholder="wedding-photography (auto-generated if empty)"
+              disabled={isLoading}
             />
+            {errors.key && (
+              <p className="mt-1 text-sm text-red-400">{errors.key}</p>
+            )}
+            <p className="mt-1 text-xs text-gray-400">
+              Used in URLs: /gallery/{formData.key || 'your-key'}
+            </p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-white mb-2">
+            <label className="block text-sm font-medium text-gray-300 mb-2">
               Parent Category (Optional)
             </label>
             <select
               value={formData.parentId}
-              onChange={(e) => setFormData(prev => ({ ...prev, parentId: e.target.value }))}
-              className="form-select"
+              onChange={(e) => handleInputChange('parentId', e.target.value)}
+              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={isLoading}
             >
               <option value="">None (Top-level category)</option>
               {availableParentCategories.map(cat => (
@@ -433,28 +491,46 @@ function CategoryEditModal({ isOpen, onClose, category, categories, onSave }: Ca
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-white mb-2">
+            <label className="block text-sm font-medium text-gray-300 mb-2">
               Description
             </label>
             <textarea
               value={formData.description}
-              onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+              onChange={(e) => handleInputChange('description', e.target.value)}
               rows={4}
-              className="form-textarea"
+              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
               placeholder="Describe this category..."
+              disabled={isLoading}
             />
           </div>
 
-          <div className="flex items-center space-x-3">
-            <input
-              type="checkbox"
-              id="isPrivate"
-              checked={formData.isPrivate}
-              onChange={(e) => setFormData(prev => ({ ...prev, isPrivate: e.target.checked }))}
-              className="form-checkbox"
-            />
-            <label htmlFor="isPrivate" className="text-white text-sm">
-              Private category (only visible to admins)
+          {/* Privacy Toggle */}
+          <div className="flex items-center justify-between p-4 bg-gray-700/50 rounded-lg">
+            <div>
+              <div className="flex items-center space-x-2 text-white font-medium">
+                {formData.isPrivate ? (
+                  <EyeOff className="w-4 h-4 text-red-400" />
+                ) : (
+                  <FolderOpen className="w-4 h-4 text-green-400" />
+                )}
+                <span>Privacy Setting</span>
+              </div>
+              <p className="text-sm text-gray-400 mt-1">
+                {formData.isPrivate 
+                  ? 'Only visible to admins' 
+                  : 'Visible to all visitors'
+                }
+              </p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={formData.isPrivate}
+                onChange={(e) => handleInputChange('isPrivate', e.target.checked)}
+                className="sr-only peer"
+                disabled={isLoading}
+              />
+              <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-500"></div>
             </label>
           </div>
 
@@ -463,18 +539,18 @@ function CategoryEditModal({ isOpen, onClose, category, categories, onSave }: Ca
               type="button"
               onClick={onClose}
               disabled={isLoading}
-              className="btn-ghost"
+              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 text-white rounded-lg transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isLoading || !formData.name.trim()}
-              className="btn-primary flex items-center space-x-2"
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition-colors flex items-center space-x-2"
             >
               {isLoading ? (
                 <>
-                  <div className="w-4 h-4 spinner" />
+                  <div className="w-4 h-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
                   <span>Saving...</span>
                 </>
               ) : (
@@ -490,3 +566,5 @@ function CategoryEditModal({ isOpen, onClose, category, categories, onSave }: Ca
     </div>
   )
 }
+
+export default CategoryCard

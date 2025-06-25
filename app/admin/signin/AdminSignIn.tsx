@@ -24,7 +24,8 @@ export default function AdminSignIn() {
     if (session?.user) {
       const userRole = (session.user as any)?.role
       if (userRole === 'ADMIN') {
-        router.push('/admin')
+        // Redirect to home page instead of admin
+        router.push('/')
       } else {
         setError('Access denied. Admin privileges required.')
       }
@@ -48,6 +49,16 @@ export default function AdminSignIn() {
         toast.error('Sign in failed')
       } else if (result?.ok) {
         toast.success('Signed in successfully!')
+        
+        // Force cache invalidation after successful login
+        try {
+          await fetch('/api/revalidate', { method: 'POST' })
+        } catch (error) {
+          console.error('Failed to invalidate cache after login:', error)
+        }
+        
+        // Redirect to home page after successful login
+        router.push('/')
       }
     } catch (error) {
       console.error('Sign in error:', error)

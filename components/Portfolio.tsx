@@ -1,11 +1,14 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useSession } from 'next-auth/react'
+import { Edit, Settings } from 'lucide-react'
 import { Category } from '@/lib/types'
+import { useAuthCache } from '@/lib/hooks/useAuthCache'
+import EditCategoryModal from '@/components/EditCategoryModal'
 
 // Client-safe thumbnail function (doesn't import server-side Cloudinary)
 function getClientThumbnailUrl(cloudinaryId: string, width: number, height: number): string {
@@ -18,19 +21,51 @@ function getClientThumbnailUrl(cloudinaryId: string, width: number, height: numb
 
 interface PortfolioProps {
   categories: Category[]
+  onRefresh?: () => Promise<void>
 }
 
-export default function ModernPortfolio({ categories }: PortfolioProps) {
+export default function ModernPortfolio({ categories, onRefresh }: PortfolioProps) {
   const [mounted, setMounted] = useState(false)
   const [categoriesList, setCategoriesList] = useState(categories)
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const { data: session } = useSession()
+  
+  // Get isAdmin from useAuthCache hook - this is the ONLY isAdmin declaration
+  const { isAdmin, forceRefresh } = useAuthCache()
 
   useEffect(() => {
     setMounted(true)
     setCategoriesList(categories)
   }, [categories])
 
-  const isAdmin = (session?.user as any)?.role === 'ADMIN'
+  // Update categories when they change (e.g., after cache invalidation)
+  useEffect(() => {
+    setCategoriesList(categories)
+  }, [categories])
+
+  const handleEditCategory = (category: Category) => {
+    setEditingCategory(category)
+    setIsEditModalOpen(true)
+  }
+
+  const handleEditSuccess = async () => {
+    // Refresh the categories data and invalidate cache
+    if (onRefresh) {
+      await onRefresh()
+    }
+    
+    // Force cache refresh
+    await forceRefresh()
+    
+    setIsEditModalOpen(false)
+    setEditingCategory(null)
+  }
+
+  const handleCloseEdit = () => {
+    setIsEditModalOpen(false)
+    setEditingCategory(null)
+  }
 
   if (!mounted) {
     return <div className="h-96 bg-gray-800 animate-pulse" />
@@ -42,18 +77,24 @@ export default function ModernPortfolio({ categories }: PortfolioProps) {
 
   // Calculate total images for each category (including subcategories)
   const categoriesWithTotals = topLevelCategories.map(category => {
+    // For subcategories, only count images from non-private subcategories (unless admin)
     const subcategoryImages = category.subcategories?.reduce(
-      (total, sub) => total + (sub._count?.images || 0),
+      (total, sub) => {
+        // If admin, count all subcategory images regardless of privacy
+        // If not admin, only count images from public subcategories
+        if (isAdmin || !sub.isPrivate) {
+          return total + (sub._count?.images || 0)
+        }
+        return total
+      },
       0
     ) || 0
+    
     const totalImages = (category._count?.images || 0) + subcategoryImages
 
-    // Get most recent image for background
-    const allCategoryImages = [
-      ...(category.images || []),
-      ...(category.subcategories?.flatMap(sub => sub.images || []) || [])
-    ]
-    const recentImage = allCategoryImages
+    // ✅ FIX: Only get most recent image from the PARENT category itself, NOT subcategories
+    const categoryImages = category.images || []
+    const recentImage = categoryImages
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0]
 
     return {
@@ -64,56 +105,93 @@ export default function ModernPortfolio({ categories }: PortfolioProps) {
   }).filter(cat => cat.totalImages > 0)
 
   return (
-    <section id="portfolio" className="bg-gray-800 py-12 lg:py-16">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Section Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          viewport={{ once: true }}
-          className="text-center mb-12"
-        >
-          <h2 className="text-2xl md:text-3xl lg:text-4xl font-light text-white mb-4 tracking-tight">
-            Portfolio
-          </h2>
-          <div className="w-16 h-px bg-gray-400 mx-auto mb-6"></div>
-          <p className="text-base md:text-lg text-gray-300 max-w-2xl mx-auto leading-relaxed">
-            Explore my collection of photography work across different styles and occasions
-          </p>
-        </motion.div>
-
-        {/* Portfolio Grid */}
-        {categoriesWithTotals.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
-            {categoriesWithTotals.map((category, index) => (
-              <ModernPortfolioCard
-                key={category.id}
-                category={category}
-                index={index}
-                isAdmin={isAdmin}
-              />
-            ))}
-          </div>
-        ) : (
+    <>
+      <section id="portfolio" className="bg-gray-800 py-12 lg:py-16">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Section Header */}
           <motion.div
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
             viewport={{ once: true }}
-            className="text-center py-16"
+            className="text-center mb-12"
           >
-            <h3 className="text-xl text-gray-300 mb-3 font-light">No Galleries Available</h3>
-            <p className="text-gray-400">
-              {isAdmin 
-                ? "Create your first category to get started!" 
-                : "Check back soon for new photo galleries!"
-              }
+            <div className="flex items-center justify-center space-x-4 mb-4">
+              <h2 className="text-2xl md:text-3xl lg:text-4xl font-light text-white tracking-tight">
+                Portfolio
+              </h2>
+              {/* Admin Quick Access */}
+              {isAdmin && (
+                <Link
+                  href="/admin"
+                  className="flex items-center space-x-2 px-3 py-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 rounded-lg transition-colors text-sm"
+                >
+                  <Settings className="w-4 h-4" />
+                  <span>Manage</span>
+                </Link>
+              )}
+            </div>
+            <div className="w-16 h-px bg-gray-400 mx-auto mb-6"></div>
+            <p className="text-base md:text-lg text-gray-300 max-w-2xl mx-auto leading-relaxed">
+              Explore my collection of photography work across different styles and occasions
             </p>
           </motion.div>
+
+          {/* Portfolio Grid */}
+          {categoriesWithTotals.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
+              {categoriesWithTotals.map((category, index) => (
+                <ModernPortfolioCard
+                  key={category.id}
+                  category={category}
+                  index={index}
+                  isAdmin={isAdmin}
+                  onEdit={() => handleEditCategory(category)}
+                />
+              ))}
+            </div>
+          ) : (
+            <motion.div
+              initial={{ opacity: 0 }}
+              whileInView={{ opacity: 1 }}
+              transition={{ duration: 0.6 }}
+              viewport={{ once: true }}
+              className="text-center py-16"
+            >
+              <h3 className="text-xl text-gray-300 mb-3 font-light">No Galleries Available</h3>
+              <p className="text-gray-400 mb-6">
+                {isAdmin 
+                  ? "Create your first category to get started!" 
+                  : "Check back soon for new photo galleries!"
+                }
+              </p>
+              {/* Admin Quick Action */}
+              {isAdmin && (
+                <Link
+                  href="/admin"
+                  className="inline-flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                >
+                  <Settings className="w-4 h-4" />
+                  <span>Go to Admin</span>
+                </Link>
+              )}
+            </motion.div>
+          )}
+        </div>
+      </section>
+
+      {/* Edit Category Modal */}
+      <AnimatePresence>
+        {isEditModalOpen && (
+          <EditCategoryModal
+            isOpen={isEditModalOpen}
+            onClose={handleCloseEdit}
+            category={editingCategory}
+            onSuccess={handleEditSuccess}
+          />
         )}
-      </div>
-    </section>
+      </AnimatePresence>
+    </>
   )
 }
 
@@ -121,9 +199,10 @@ interface ModernPortfolioCardProps {
   category: any
   index: number
   isAdmin: boolean
+  onEdit?: () => void
 }
 
-function ModernPortfolioCard({ category, index, isAdmin }: ModernPortfolioCardProps) {
+function ModernPortfolioCard({ category, index, isAdmin, onEdit }: ModernPortfolioCardProps) {
   const [imageError, setImageError] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
 
@@ -147,16 +226,35 @@ function ModernPortfolioCard({ category, index, isAdmin }: ModernPortfolioCardPr
 
   const gradientClass = generateGradient(category.name)
 
+  const handleEditClick = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (onEdit) {
+      onEdit()
+    }
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6, delay: index * 0.1 }}
       viewport={{ once: true }}
-      className="group"
+      className="group relative"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
+      {/* Admin Edit Button */}
+      {isAdmin && (
+        <button
+          onClick={handleEditClick}
+          className="absolute top-2 right-2 z-20 w-8 h-8 bg-black/60 hover:bg-black/80 text-white rounded-full flex items-center justify-center transition-all duration-200 opacity-0 group-hover:opacity-100"
+          title="Edit Category"
+        >
+          <Edit className="w-4 h-4" />
+        </button>
+      )}
+
       <Link href={`/gallery/${category.key}`} className="block">
         {/* Image Container - Dark Overlay Style */}
         <div className="relative aspect-[5/4] overflow-hidden bg-gray-700 mb-4 rounded-xl shadow-lg">
@@ -183,7 +281,7 @@ function ModernPortfolioCard({ category, index, isAdmin }: ModernPortfolioCardPr
           
           {/* Privacy indicator */}
           {isAdmin && category.isPrivate && (
-            <div className="absolute top-3 right-3 px-3 py-1 bg-red-500/90 backdrop-blur-sm text-white text-xs rounded-full">
+            <div className="absolute top-3 left-3 px-3 py-1 bg-red-500/90 backdrop-blur-sm text-white text-xs rounded-full">
               Private
             </div>
           )}

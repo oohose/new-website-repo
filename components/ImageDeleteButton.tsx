@@ -1,9 +1,8 @@
-// ✅ Updated ImageDeleteButton.tsx with router.refresh for Cloudinary sync
 'use client'
 
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Trash2, AlertTriangle, X } from 'lucide-react'
+import { Trash2, AlertTriangle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useRouter } from 'next/navigation'
 
@@ -95,6 +94,7 @@ export default function ImageDeleteButton({
   variant = 'button',
   className = ''
 }: ImageDeleteButtonProps) {
+  console.log('🧪 ImageDeleteButton rendered with variant:', variant)
   const [showModal, setShowModal] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const router = useRouter()
@@ -110,7 +110,7 @@ export default function ImageDeleteButton({
         toast.success('Image deleted successfully')
         onDelete()
         setShowModal(false)
-        router.refresh() // ✅ Refresh server-rendered content
+        router.refresh()
       } else {
         const error = await response.json()
         toast.error(error.error || 'Failed to delete image')
@@ -130,9 +130,9 @@ export default function ImageDeleteButton({
   }
 
   const sizeClasses = {
-    sm: variant === 'icon' ? 'p-1' : 'px-2 py-1 text-xs',
-    md: variant === 'icon' ? 'p-2' : 'px-3 py-2 text-sm',
-    lg: variant === 'icon' ? 'p-3' : 'px-4 py-2 text-base'
+    sm: variant === 'button' ? 'p-1' : 'px-2 py-1 text-xs',
+    md: variant === 'button' ? 'p-2' : 'px-3 py-2 text-sm',
+    lg: variant === 'button' ? 'p-3' : 'px-4 py-2 text-base'
   }
 
   const iconSizes = {
@@ -141,15 +141,17 @@ export default function ImageDeleteButton({
     lg: 'w-5 h-5'
   }
 
-  if (variant === 'icon') {
+  console.log('Variant prop is:', variant)
+  if (variant === 'button') {
     return (
       <>
         <button
           onClick={handleClick}
-          className={`text-red-400 hover:text-red-300 hover:bg-red-400/20 rounded transition-colors ${sizeClasses[size]} ${className}`}
-          title="Delete image"
+          className="!bg-red-600/20 !text-red-300 !border-red-500/30 hover:!bg-red-600/30 hover:!border-red-500/50 ..."
+
         >
-          <Trash2 className={iconSizes[size]} />
+          <Trash2 className={`${iconSizes[size]} mr-2`} />
+          <span>Delete</span>
         </button>
 
         <AnimatePresence>
@@ -171,10 +173,10 @@ export default function ImageDeleteButton({
     <>
       <button
         onClick={handleClick}
-        className={`bg-red-600 hover:bg-red-700 text-white rounded transition-colors flex items-center space-x-2 ${sizeClasses[size]} ${className}`}
+        className={`text-red-400 hover:text-red-300 hover:bg-red-400/20 rounded transition-colors ${sizeClasses[size]} ${className}`}
+        title="Delete image"
       >
         <Trash2 className={iconSizes[size]} />
-        <span>Delete</span>
       </button>
 
       <AnimatePresence>

@@ -31,6 +31,12 @@ export default function AdminLayout({
       router.push('/admin/signin')
       return
     }
+
+    // If user is already an admin and tries to access /admin/signin, redirect to home
+    if (pathname === '/admin/signin' && userRole === 'ADMIN') {
+      router.push('/')
+      return
+    }
   }, [session, status, router, pathname])
 
   if (status === 'loading') {

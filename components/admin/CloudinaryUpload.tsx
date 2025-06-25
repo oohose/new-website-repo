@@ -10,7 +10,8 @@ import {
   FolderOpen,
   Folder,
   ChevronRight,
-  ChevronDown
+  ChevronDown,
+  EyeOff
 } from 'lucide-react'
 import Image from 'next/image'
 import toast from 'react-hot-toast'
@@ -86,7 +87,10 @@ const compressImage = (file: File, maxSizeMB: number = 10): Promise<File> => {
 function CategoryPicker({ categories, selectedCategoryId, onCategorySelect }: CategoryPickerProps) {
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
   
-  const toggleExpanded = (categoryId: string) => {
+  const toggleExpanded = (categoryId: string, event: React.MouseEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    
     const newExpanded = new Set(expandedCategories)
     if (newExpanded.has(categoryId)) {
       newExpanded.delete(categoryId)
@@ -96,7 +100,46 @@ function CategoryPicker({ categories, selectedCategoryId, onCategorySelect }: Ca
     setExpandedCategories(newExpanded)
   }
 
-  const renderCategory = (category: Category, level = 0) => {
+  const handleCategoryClick = (categoryId: string, event: React.MouseEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    console.log('Category clicked:', categoryId) // Debug log
+    onCategorySelect(categoryId)
+  }
+
+  // ✅ Create a proper hierarchy from flat categories array
+  const buildCategoryHierarchy = (categories: Category[]) => {
+    const categoryMap = new Map<string, Category & { subcategories: Category[] }>()
+    const rootCategories: (Category & { subcategories: Category[] })[] = []
+
+    // First pass: Create map with all categories
+    categories.forEach(cat => {
+      categoryMap.set(cat.id, { ...cat, subcategories: [] })
+    })
+
+    // Second pass: Build hierarchy
+    categories.forEach(cat => {
+      const categoryWithSubs = categoryMap.get(cat.id)!
+      
+      if (cat.parentId) {
+        // This is a subcategory
+        const parent = categoryMap.get(cat.parentId)
+        if (parent) {
+          parent.subcategories.push(categoryWithSubs)
+        } else {
+          // Parent not found, treat as root level
+          rootCategories.push(categoryWithSubs)
+        }
+      } else {
+        // This is a top-level category
+        rootCategories.push(categoryWithSubs)
+      }
+    })
+
+    return rootCategories
+  }
+
+  const renderCategory = (category: Category & { subcategories: Category[] }, level = 0) => {
     const hasSubcategories = category.subcategories && category.subcategories.length > 0
     const isExpanded = expandedCategories.has(category.id)
     const isSelected = selectedCategoryId === category.id
@@ -104,18 +147,20 @@ function CategoryPicker({ categories, selectedCategoryId, onCategorySelect }: Ca
     return (
       <div key={category.id} className={`${level > 0 ? 'ml-4' : ''}`}>
         <div
-          className={`flex items-center space-x-2 p-2 rounded cursor-pointer transition-colors ${
-            isSelected ? 'bg-blue-600 text-white' : 'hover:bg-gray-700 text-gray-300'
+          className={`flex items-center space-x-2 p-3 rounded-lg cursor-pointer transition-all duration-200 ${
+            isSelected 
+              ? 'bg-blue-600 text-white shadow-md' 
+              : 'hover:bg-gray-700 text-gray-300 hover:text-white'
           }`}
-          onClick={() => onCategorySelect(category.id)}
+          onClick={(e) => handleCategoryClick(category.id, e)}
+          style={{ minHeight: '48px' }} // Ensure minimum clickable area
         >
+          {/* Expand/Collapse Button */}
           {hasSubcategories && (
             <button
-              onClick={(e) => {
-                e.stopPropagation()
-                toggleExpanded(category.id)
-              }}
-              className="p-1 hover:bg-gray-600 rounded transition-colors"
+              onClick={(e) => toggleExpanded(category.id, e)}
+              className="p-1 hover:bg-gray-600 rounded transition-colors flex-shrink-0"
+              type="button"
             >
               {isExpanded ? (
                 <ChevronDown className="w-4 h-4" />
@@ -124,23 +169,41 @@ function CategoryPicker({ categories, selectedCategoryId, onCategorySelect }: Ca
               )}
             </button>
           )}
-          {!hasSubcategories && level > 0 && <div className="w-6" />}
           
-          {hasSubcategories ? (
-            <FolderOpen className="w-4 h-4 flex-shrink-0" />
-          ) : (
-            <Folder className="w-4 h-4 flex-shrink-0" />
+          {/* Spacing for categories without subcategories */}
+          {!hasSubcategories && level > 0 && <div className="w-6 flex-shrink-0" />}
+          
+          {/* Folder Icon */}
+          <div className="flex-shrink-0">
+            {hasSubcategories ? (
+              <FolderOpen className="w-5 h-5" />
+            ) : (
+              <Folder className="w-5 h-5" />
+            )}
+          </div>
+          
+          {/* Category Name with level indicator */}
+          <span className="flex-1 text-sm font-medium truncate">
+            {level > 0 && '↳ '}{category.name}
+          </span>
+          
+          {/* Privacy indicator */}
+          {category.isPrivate && (
+            <div className="flex-shrink-0">
+              <EyeOff className="w-3 h-3 text-red-400" />
+            </div>
           )}
           
-          <span className="flex-1 text-sm">{category.name}</span>
-          <span className="text-xs text-gray-500">
+          {/* Image Count */}
+          <span className="text-xs text-gray-400 flex-shrink-0 min-w-[30px] text-right">
             {category._count?.images || 0}
           </span>
         </div>
         
+        {/* Subcategories */}
         {hasSubcategories && isExpanded && (
-          <div className="mt-1">
-            {category.subcategories?.map(subcategory => 
+          <div className="mt-1 space-y-1">
+            {category.subcategories.map(subcategory => 
               renderCategory(subcategory, level + 1)
             )}
           </div>
@@ -149,13 +212,63 @@ function CategoryPicker({ categories, selectedCategoryId, onCategorySelect }: Ca
     )
   }
 
+  // ✅ Build hierarchy from categories
+  const hierarchicalCategories = buildCategoryHierarchy(categories)
+
   return (
-    <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 max-h-64 overflow-y-auto">
-      <h4 className="text-white font-medium mb-3">Select Category</h4>
-      {categories
-      .filter(cat => !cat.parentId) // top-level only
-      .sort((a, b) => a.name.localeCompare(b.name)) // optional sorting
-      .map(category => renderCategory(category))}
+    <div className="bg-gray-800 border border-gray-700 rounded-lg max-h-64 overflow-y-auto">
+      {/* Header */}
+      <div className="sticky top-0 bg-gray-800 border-b border-gray-700 p-4 z-10">
+        <h4 className="text-white font-medium">Select Category</h4>
+        <div className="text-xs text-gray-400 mt-1 space-y-1">
+          <p>Total available: {categories.length} categories</p>
+          {selectedCategoryId && (
+            <p className="text-blue-400">✓ Category selected</p>
+          )}
+        </div>
+      </div>
+      
+      {/* Categories List */}
+      <div className="p-2 space-y-1">
+        {categories.length > 0 ? (
+          hierarchicalCategories.length > 0 ? (
+            <>
+              {hierarchicalCategories
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map(category => renderCategory(category))}
+              
+              {/* ✅ Also show any orphaned subcategories that couldn't find their parent */}
+              {categories
+                .filter(cat => cat.parentId && !categories.find(parent => parent.id === cat.parentId))
+                .map(orphanedCat => (
+                  <div key={`orphaned-${orphanedCat.id}`} className="border-t border-gray-600 pt-2 mt-2">
+                    <div className="text-xs text-yellow-400 mb-1 px-2">Orphaned subcategories:</div>
+                    {renderCategory({ ...orphanedCat, subcategories: [] }, 0)}
+                  </div>
+                ))
+              }
+            </>
+          ) : (
+            <div className="p-4 text-center text-yellow-400">
+              <p className="text-sm">Found {categories.length} categories but couldn't build hierarchy</p>
+              <div className="mt-2 text-xs text-left bg-gray-700 rounded p-2">
+                {categories.map(cat => (
+                  <div key={cat.id} 
+                       className="cursor-pointer hover:bg-gray-600 p-1 rounded"
+                       onClick={(e) => handleCategoryClick(cat.id, e)}>
+                    {cat.name} {cat.parentId ? `(sub of ${cat.parentId})` : '(root)'}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        ) : (
+          <div className="p-4 text-center text-gray-400">
+            <p className="text-sm">No categories available</p>
+            <p className="text-xs mt-1">Create a category first in the Categories tab</p>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

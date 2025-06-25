@@ -4,50 +4,32 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Image from 'next/image'
 import Link from 'next/link'
-import { ArrowLeft, X, ChevronLeft, ChevronRight, Settings } from 'lucide-react'
-
-interface ImageType {
-  id: string
-  title: string
-  description: string | null
-  cloudinaryId: string
-  url: string
-  width: number | null
-  height: number | null
-  format: string | null
-  isHeader: boolean
-  createdAt: string
-}
-
-interface Category {
-  id: string
-  key: string
-  name: string
-  description: string | null
-  isPrivate: boolean
-  images: ImageType[]
-  subcategories: any[]
-  _count: { images: number }
-}
+import { ArrowLeft, X, ChevronLeft, ChevronRight, Edit } from 'lucide-react'
+import EditCategoryModal from '@/components/EditCategoryModal'
+import { Category, Image as ImageType } from '@/lib/types'
 
 interface DarkElegantGalleryViewProps {
   category: Category
   isAdmin: boolean
+  onRefresh?: () => Promise<void>
 }
 
-export default function DarkElegantGalleryView({ category, isAdmin }: DarkElegantGalleryViewProps) {
+export default function DarkElegantGalleryView({ category, isAdmin, onRefresh }: DarkElegantGalleryViewProps) {
   const [selectedImage, setSelectedImage] = useState<ImageType | null>(null)
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
 
   // FIXED: Simple Cloudinary URL function that doesn't crop
   const getOptimizedUrl = (image: ImageType, width?: number, forLightbox = false) => {
     if (!image.cloudinaryId) {
-      return image.url || '/placeholder-image.jpg'
+      // Fallback to url property if available, or placeholder
+      return (image as any).url || '/placeholder-image.jpg'
     }
     
     const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME
     if (!cloudName) {
-      return image.url || '/placeholder-image.jpg'
+      return (image as any).url || '/placeholder-image.jpg'
     }
 
     // For lightbox - optimized size for faster loading
@@ -82,8 +64,13 @@ export default function DarkElegantGalleryView({ category, isAdmin }: DarkElegan
     return gradients[hash % gradients.length]
   }
 
-  const headerImage = category.images.find(img => img.isHeader)
-  const galleryImages = category.images.filter(img => !img.isHeader)
+  const headerImage = category.images.find(img => (img as any).isHeader)
+  const galleryImages = category.images.filter(img => !(img as any).isHeader)
+
+  // Filter subcategories based on admin status
+  const visibleSubcategories = category.subcategories?.filter(sub => 
+    isAdmin || !sub.isPrivate
+  ) || []
 
   const openLightbox = (image: ImageType, index: number) => {
     setSelectedImage(image)
@@ -104,6 +91,34 @@ export default function DarkElegantGalleryView({ category, isAdmin }: DarkElegan
     const prevIndex = currentImageIndex === 0 ? galleryImages.length - 1 : currentImageIndex - 1
     setSelectedImage(galleryImages[prevIndex])
     setCurrentImageIndex(prevIndex)
+  }
+
+  // Edit category handlers
+  const handleEditCategory = (categoryToEdit: Category) => {
+    setEditingCategory(categoryToEdit)
+    setIsEditModalOpen(true)
+  }
+
+  const handleEditSuccess = async () => {
+    // Refresh the data and invalidate cache
+    if (onRefresh) {
+      await onRefresh()
+    }
+    
+    // Also invalidate Next.js cache
+    try {
+      await fetch('/api/revalidate', { method: 'POST' })
+    } catch (error) {
+      console.error('Failed to revalidate cache:', error)
+    }
+    
+    setIsEditModalOpen(false)
+    setEditingCategory(null)
+  }
+
+  const handleCloseEdit = () => {
+    setIsEditModalOpen(false)
+    setEditingCategory(null)
   }
 
   // Keyboard navigation
@@ -167,58 +182,50 @@ export default function DarkElegantGalleryView({ category, isAdmin }: DarkElegan
               />
             </div>
           )}
-          
+
           {/* Content */}
           <div className="relative z-10 text-center max-w-4xl mx-auto">
-            {/* Back Button */}
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.6 }}
-              className="absolute top-0 left-0 -mt-20"
-            >
-              <Link
-                href="/#portfolio"
-                className="inline-flex items-center space-x-3 text-white/70 hover:text-white transition-colors group"
-              >
-                <div className="w-12 h-12 rounded-full border border-white/20 flex items-center justify-center group-hover:border-white/40 transition-colors">
-                  <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform duration-300" />
-                </div>
-                <span className="font-light tracking-wide">Back to Portfolio</span>
-              </Link>
-            </motion.div>
-
-            {/* ✅ ISSUE #1 FIX: Make entire header clickable */}
-            {isAdmin && (
+            {/* Navigation Buttons - Stacked vertically on the left */}
+            <div className="absolute top-0 left-0 -mt-20 flex flex-col space-y-4">
+              {/* Back Button - Top */}
               <motion.div
-                initial={{ opacity: 0, x: 20 }}
+                initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.6 }}
-                className="absolute top-0 right-0 -mt-20"
               >
                 <Link
-                  href="/admin"
-                  className="group inline-flex items-center space-x-3 text-white/70 hover:text-white transition-colors"
+                  href="/#portfolio"
+                  className="inline-flex items-center space-x-3 text-white/70 hover:text-white transition-colors group"
                 >
-                  <span className="font-light tracking-wide">Edit Category</span>
                   <div className="w-12 h-12 rounded-full border border-white/20 flex items-center justify-center group-hover:border-white/40 transition-colors">
-                    <Settings className="w-5 h-5 group-hover:rotate-45 transition-transform duration-300" />
+                    <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform duration-300" />
                   </div>
+                  <span className="font-light tracking-wide">Back to Portfolio</span>
                 </Link>
               </motion.div>
-            )}
 
-            {/* Main Content - Make entire header clickable for admin */}
-            <div className={isAdmin ? "cursor-pointer" : ""}>
+              {/* Edit Button - Bottom (Admin Only) */}
               {isAdmin && (
-                <Link href="/admin" className="block">
-                  <div className="p-8 rounded-lg hover:bg-white/5 transition-all duration-300 border border-transparent hover:border-white/10">
-                    <HeaderContent category={category} isAdmin={isAdmin} />
-                  </div>
-                </Link>
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.6, delay: 0.1 }}
+                >
+                  <button
+                    onClick={() => handleEditCategory(category)}
+                    className="group inline-flex items-center space-x-3 text-white/70 hover:text-white transition-colors"
+                  >
+                    <div className="w-12 h-12 rounded-full border border-white/20 flex items-center justify-center group-hover:border-white/40 transition-colors">
+                      <Edit className="w-5 h-5 group-hover:rotate-45 transition-transform duration-300" />
+                    </div>
+                    <span className="font-light tracking-wide">Edit Category</span>
+                  </button>
+                </motion.div>
               )}
-              {!isAdmin && <HeaderContent category={category} isAdmin={isAdmin} />}
             </div>
+
+            {/* Main Content */}
+            <HeaderContent category={category} isAdmin={isAdmin} />
           </div>
 
           {/* Scroll Indicator */}
@@ -226,7 +233,7 @@ export default function DarkElegantGalleryView({ category, isAdmin }: DarkElegan
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 1, delay: 1.2 }}
-            className="absolute bottom-8 left-1/2 transform -translate-x-1/2"
+            className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-10"
           >
             <div className="flex flex-col items-center space-y-3 text-white/50">
               <span className="text-sm font-light tracking-wide">Scroll to view gallery</span>
@@ -303,8 +310,8 @@ export default function DarkElegantGalleryView({ category, isAdmin }: DarkElegan
               </div>
             )}
 
-            {/* ✅ ISSUE #2 FIX: Subcategories with same styling + "More from this collection" */}
-            {category.subcategories.length > 0 && (
+            {/* Subcategories Section */}
+            {visibleSubcategories.length > 0 && (
               <motion.div
                 initial={{ opacity: 0, y: 30 }}
                 whileInView={{ opacity: 1, y: 0 }}
@@ -319,9 +326,9 @@ export default function DarkElegantGalleryView({ category, isAdmin }: DarkElegan
                   <div className="w-16 h-px bg-gradient-to-r from-transparent via-white/50 to-transparent mx-auto"></div>
                 </div>
                 
-                {/* ✅ Updated to use same styling as Portfolio.tsx */}
+                {/* Subcategories Grid with Edit Buttons */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
-                  {category.subcategories.map((subcategory, index) => {
+                  {visibleSubcategories.map((subcategory, index) => {
                     const recentImage = subcategory.images?.[0]
                     const gradientClass = generateGradient(subcategory.name)
 
@@ -332,10 +339,24 @@ export default function DarkElegantGalleryView({ category, isAdmin }: DarkElegan
                         whileInView={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.6, delay: index * 0.1 }}
                         viewport={{ once: true }}
-                        className="group"
+                        className="group relative"
                       >
+                        {/* Edit Button for Subcategories */}
+                        {isAdmin && (
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              handleEditCategory(subcategory)
+                            }}
+                            className="absolute top-2 right-2 z-20 w-8 h-8 bg-black/60 hover:bg-black/80 text-white rounded-full flex items-center justify-center transition-all duration-200 opacity-0 group-hover:opacity-100"
+                            title="Edit Subcategory"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                        )}
+
                         <Link href={`/gallery/${subcategory.key}`} className="block">
-                          {/* Same styling as Portfolio cards */}
                           <div className="relative aspect-[5/4] overflow-hidden bg-gray-700 mb-4 rounded-xl shadow-lg">
                             {/* Background Image or Gradient */}
                             {recentImage ? (
@@ -355,7 +376,7 @@ export default function DarkElegantGalleryView({ category, isAdmin }: DarkElegan
                             
                             {/* Privacy indicator */}
                             {isAdmin && subcategory.isPrivate && (
-                              <div className="absolute top-3 right-3 px-3 py-1 bg-red-500/90 backdrop-blur-sm text-white text-xs rounded-full">
+                              <div className="absolute top-3 left-3 px-3 py-1 bg-red-500/90 backdrop-blur-sm text-white text-xs rounded-full">
                                 Private
                               </div>
                             )}
@@ -406,6 +427,18 @@ export default function DarkElegantGalleryView({ category, isAdmin }: DarkElegan
           </div>
         </div>
       </div>
+
+      {/* Edit Category Modal */}
+      <AnimatePresence>
+        {isEditModalOpen && (
+          <EditCategoryModal
+            isOpen={isEditModalOpen}
+            onClose={handleCloseEdit}
+            category={editingCategory}
+            onSuccess={handleEditSuccess}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Lightbox Modal */}
       <AnimatePresence>
