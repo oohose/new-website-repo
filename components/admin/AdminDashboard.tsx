@@ -89,9 +89,18 @@ export default function AdminDashboard({ children }: AdminDashboardProps) {
   const deleteCategory = async (id: string) => {
     try {
       const response = await fetch(`/api/categories/${id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json'
+        }
       })
-      if (!response.ok) throw new Error('Failed to delete category')
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
+        console.error('Delete API Error:', response.status, errorData)
+        throw new Error(errorData.error || `HTTP ${response.status}: Failed to delete category`)
+      }
+      
       await refreshDashboardData()
     } catch (error: unknown) {
       console.error('Delete category error:', error)

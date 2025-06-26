@@ -3,6 +3,14 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { PrismaClient } from '@prisma/client'
+import { v2 as cloudinary } from 'cloudinary'
+
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+})
 
 // If none of the above work, use this direct instantiation:
 const prisma = new PrismaClient()
@@ -146,7 +154,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Check if category exists and get image count
+    // Get category with all nested content
     const category = await prisma.category.findUnique({
       where: { id: params.id },
       include: {
@@ -163,32 +171,79 @@ export async function DELETE(
       return NextResponse.json({ error: 'Category not found' }, { status: 404 })
     }
 
-    // Check if category has images or subcategories
-    const totalImages = category.images.length + 
-      category.subcategories.reduce((sum, sub) => sum + sub.images.length, 0)
-    
-    if (totalImages > 0) {
+    const deletedImages: string[] = []
+    let deletedImageCount = 0
+    let deletedSubcategoryCount = 0
+
+    try {
+      // Delete all images from this category and subcategories
+      const allImages = [
+        ...category.images,
+        ...category.subcategories.flatMap(sub => sub.images)
+      ]
+
+      // Delete images from Cloudinary
+      for (const image of allImages) {
+        if (image.cloudinaryId) {
+          try {
+            await cloudinary.uploader.destroy(image.cloudinaryId)
+            deletedImages.push(image.cloudinaryId)
+          } catch (cloudinaryError) {
+            console.warn(`Failed to delete image from Cloudinary: ${image.cloudinaryId}`, cloudinaryError)
+            // Continue with database deletion even if Cloudinary fails
+          }
+        }
+      }
+
+      // Use transaction to delete everything in the correct order
+      await prisma.$transaction(async (tx) => {
+        // Delete images from subcategories
+        for (const subcategory of category.subcategories) {
+          if (subcategory.images.length > 0) {
+            await tx.image.deleteMany({
+              where: { categoryId: subcategory.id }
+            })
+            deletedImageCount += subcategory.images.length
+          }
+        }
+
+        // Delete subcategories
+        if (category.subcategories.length > 0) {
+          await tx.category.deleteMany({
+            where: { parentId: params.id }
+          })
+          deletedSubcategoryCount = category.subcategories.length
+        }
+
+        // Delete images from main category
+        if (category.images.length > 0) {
+          await tx.image.deleteMany({
+            where: { categoryId: params.id }
+          })
+          deletedImageCount += category.images.length
+        }
+
+        // Finally delete the main category
+        await tx.category.delete({
+          where: { id: params.id }
+        })
+      })
+
+      return NextResponse.json({ 
+        message: 'Category and all content deleted successfully',
+        deletedImages: deletedImageCount,
+        deletedSubcategories: deletedSubcategoryCount,
+        cloudinaryImagesDeleted: deletedImages.length
+      })
+
+    } catch (deleteError) {
+      console.error('Error during deletion process:', deleteError)
       return NextResponse.json(
-        { error: 'Cannot delete category with images. Please move or delete images first.' },
-        { status: 400 }
+        { error: 'Failed to delete category and its content' },
+        { status: 500 }
       )
     }
 
-    if (category.subcategories.length > 0) {
-      return NextResponse.json(
-        { error: 'Cannot delete category with subcategories. Please delete subcategories first.' },
-        { status: 400 }
-      )
-    }
-
-    // Delete the category
-    await prisma.category.delete({
-      where: { id: params.id }
-    })
-
-    return NextResponse.json({ 
-      message: 'Category deleted successfully'
-    })
   } catch (error) {
     console.error('Error deleting category:', error)
     return NextResponse.json(
