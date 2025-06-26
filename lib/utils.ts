@@ -37,7 +37,8 @@ export const siteConfig = {
     phone: process.env.PHOTOGRAPHER_PHONE || "+1 (832) 910-6932",
     location: process.env.PHOTOGRAPHER_LOCATION || "Houston, TX"
   },
-  social: {
+  // ✅ Fixed: Changed from 'social' to 'socialLinks' to match your Contact.tsx
+  socialLinks: {
     instagram: process.env.INSTAGRAM_URL || "https://instagram.com/pey.s6",
     facebook: process.env.FACEBOOK_URL || "",
     twitter: process.env.TWITTER_URL || "",

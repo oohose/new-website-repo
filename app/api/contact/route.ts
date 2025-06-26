@@ -1,9 +1,11 @@
-// app/api/contact/route.ts
+// app/api/contact/route.ts - Using Resend with default domain
 import { NextRequest, NextResponse } from 'next/server'
-import nodemailer from 'nodemailer'
+import { Resend } from 'resend'
 
 export async function POST(request: NextRequest) {
   try {
+    console.log('📧 Contact API called')
+    
     const body = await request.json()
     const { name, email, message, eventType, eventDate } = body
 
@@ -24,115 +26,107 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check if email configuration is available
-    if (!process.env.EMAIL_FROM || !process.env.EMAIL_APP_PASSWORD) {
-      console.warn('Email configuration missing. Contact form cannot be processed.')
+    // Check for Resend API key
+    if (!process.env.RESEND_API_KEY) {
+      console.warn('⚠️ Resend API key missing')
       return NextResponse.json(
-        { error: 'Email service is not configured. Please try again later or contact us directly.' },
+        { error: 'Email service not configured' },
         { status: 503 }
       )
     }
 
-    try {
-      // Create transporter
-      const transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          user: process.env.EMAIL_FROM,
-          pass: process.env.EMAIL_APP_PASSWORD,
-        },
-      })
+    // Initialize Resend
+    const resend = new Resend(process.env.RESEND_API_KEY)
 
-      // Verify transporter configuration
-      await transporter.verify()
-
-      // Format event date for email
-      const formatEventDate = (dateString: string) => {
-        try {
-          return new Date(dateString).toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-          })
-        } catch {
-          return dateString
-        }
+    // Format event date
+    const formatEventDate = (dateString: string) => {
+      try {
+        return new Date(dateString).toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        })
+      } catch {
+        return dateString
       }
+    }
 
-      // Email content for admin (cleaner format since it appears from client)
-      const adminEmailContent = `
+    // Email content
+    const emailContent = `
+New contact form submission from ${name}
+
+Contact Details:
+• Name: ${name}
+• Email: ${email}
+${eventType ? `• Event Type: ${eventType}` : ''}
+${eventDate ? `• Event Date: ${formatEventDate(eventDate)}` : ''}
+
+Message:
 ${message}
 
 ---
-Contact Details:
-Phone: ${process.env.PHOTOGRAPHER_PHONE || 'Not provided'}
-${eventType ? `Event Type: ${eventType}` : ''}
-${eventDate ? `Event Date: ${formatEventDate(eventDate)}` : ''}
+Submitted: ${new Date().toLocaleString()}
+Reply directly to this email to respond to ${name}.
+    `.trim()
 
-Submitted via website contact form at ${new Date().toLocaleString()}
-      `.trim()
-
-      // Send email to admin (appears to come from client)
-      await transporter.sendMail({
-        from: `"${name}" <${process.env.EMAIL_FROM}>`, // Display name shows client's name
-        to: process.env.EMAIL_TO || process.env.EMAIL_FROM,
-        subject: `New Contact Form Submission from ${name}`,
-        text: adminEmailContent,
-        replyTo: email, // When you hit "Reply", it goes to the client's email
-        headers: {
-          'X-Original-Sender': email, // Custom header showing original sender
-        }
+    try {
+      console.log('📧 Sending email via Resend...')
+      
+      // Send email to you using Resend's default domain
+      const result = await resend.emails.send({
+        from: 'Contact Form <onboarding@resend.dev>', // ✅ Resend's default domain
+        to: [process.env.EMAIL_TO || 'peysphotos6@gmail.com'],
+        subject: `New Contact: ${name} - ${eventType || 'General Inquiry'}`,
+        text: emailContent,
+        replyTo: email, // When you reply, it goes to the visitor
       })
 
-      // Send auto-reply to the user
-      const autoReplyContent = `
-Hi ${name},
+      console.log('✅ Email sent via Resend:', result)
+
+      // Send auto-reply to visitor
+      try {
+        await resend.emails.send({
+          from: 'Peyton\'s Photography <onboarding@resend.dev>', // ✅ Default domain
+          to: [email],
+          subject: 'Thank you for your inquiry - Peyton\'s Photography',
+          text: `Hi ${name},
 
 Thank you for reaching out! I've received your message and will get back to you within 24-48 hours.
 
 ${eventType ? `I see you're interested in ${eventType.toLowerCase()} photography. ` : ''}I'm excited to learn more about your vision and how I can help capture your special moments.
 
 Best regards,
-${process.env.PHOTOGRAPHER_NAME || 'Peyton Snipes'}
+Peyton Snipes
 
 ---
-This is an automated reply. Please do not reply to this email.
-If you need immediate assistance, please call ${process.env.PHOTOGRAPHER_PHONE || '(832) 910-6932'}.
-      `.trim()
+Peyton's Photography
+Phone: (832) 910-6932
+Email: peysphotos6@gmail.com
+Instagram: @pey.s6
 
-      await transporter.sendMail({
-        from: process.env.EMAIL_FROM,
-        to: email,
-        subject: 'Thank you for your inquiry - Peyton\'s Photography',
-        text: autoReplyContent,
-      })
+This is an automated confirmation. Please don't reply to this email - instead, I'll contact you directly from peysphotos6@gmail.com.`
+        })
+        console.log('✅ Auto-reply sent')
+      } catch (autoReplyError) {
+        console.warn('⚠️ Auto-reply failed (but main email sent):', autoReplyError)
+      }
 
       return NextResponse.json({ 
-        message: 'Message sent successfully! Check your email for a confirmation.' 
+        message: 'Message sent successfully! Check your email for confirmation.' 
       })
 
-    } catch (emailError) {
-      console.error('Email sending error:', emailError)
-      
+    } catch (emailError: any) {
+      console.error('❌ Resend error:', emailError)
       return NextResponse.json(
-        { error: 'Failed to send email. Please try again later or contact us directly.' },
+        { error: 'Failed to send email. Please try again.' },
         { status: 500 }
       )
     }
 
-  } catch (error) {
-    console.error('Contact form error:', error)
-    
-    // Handle specific error types
-    if (error instanceof SyntaxError) {
-      return NextResponse.json(
-        { error: 'Invalid request format' },
-        { status: 400 }
-      )
-    }
-
+  } catch (error: any) {
+    console.error('❌ Contact form error:', error)
     return NextResponse.json(
-      { error: 'Failed to process your message. Please try again later.' },
+      { error: 'Failed to process message' },
       { status: 500 }
     )
   }

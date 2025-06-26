@@ -7,17 +7,17 @@ export const siteConfig = {
     email: "peysphotos6@gmail.com",
     phone: "+1 (832) 910-6932",
     location: "Houston, TX",
-    bio: "I'm a passionate photographer who believes that every moment has a story to tell. With an eye for detail and a love for capturing authentic emotions, I specialize in creating timeless images that you'll treasure forever."
+    bio: ""
   },
 
   content: {
     hero: {
-      title: "Capturing Life's Beautiful Moments",
-      subtitle: "Professional photography with a personal touch",
+      title: "Welcome.",
+      subtitle: "",
       cta: "View My Work"
     },
     about: {
-      content: "Photography is more than just taking pictures—it's about freezing moments in time, preserving memories, and telling stories that matter. My approach combines technical expertise with creative vision to deliver images that truly reflect who you are and what matters most to you."
+      content: ""
     }
   },
 
@@ -97,14 +97,5 @@ export const siteConfig = {
   },
 
   business: {
-    hours: {
-      monday: "9:00 AM - 6:00 PM",
-      tuesday: "9:00 AM - 6:00 PM",
-      wednesday: "9:00 AM - 6:00 PM",
-      thursday: "9:00 AM - 6:00 PM",
-      friday: "9:00 AM - 6:00 PM",
-      saturday: "10:00 AM - 4:00 PM",
-      sunday: "By Appointment"
-    }
   }
 }
