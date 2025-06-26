@@ -172,6 +172,7 @@ export async function DELETE(
     }
 
     const deletedImages: string[] = []
+    const deletedFolders: string[] = []
     let deletedImageCount = 0
     let deletedSubcategoryCount = 0
 
@@ -229,11 +230,45 @@ export async function DELETE(
         })
       })
 
+      // Delete Cloudinary folders AFTER database cleanup
+      try {
+        // Delete subcategory folders
+        for (const subcategory of category.subcategories) {
+          const subcategoryFolderPath = `portfolio/${subcategory.key}`
+          try {
+            await cloudinary.api.delete_folder(subcategoryFolderPath)
+            deletedFolders.push(subcategoryFolderPath)
+            console.log(`Deleted Cloudinary folder: ${subcategoryFolderPath}`)
+          } catch (folderError: any) {
+            if (folderError.error?.http_code !== 404) { // Ignore "folder not found" errors
+              console.warn(`Failed to delete Cloudinary folder: ${subcategoryFolderPath}`, folderError)
+            }
+          }
+        }
+
+        // Delete main category folder
+        const mainFolderPath = `portfolio/${category.key}`
+        try {
+          await cloudinary.api.delete_folder(mainFolderPath)
+          deletedFolders.push(mainFolderPath)
+          console.log(`Deleted Cloudinary folder: ${mainFolderPath}`)
+        } catch (folderError: any) {
+          if (folderError.error?.http_code !== 404) { // Ignore "folder not found" errors
+            console.warn(`Failed to delete Cloudinary folder: ${mainFolderPath}`, folderError)
+          }
+        }
+      } catch (cloudinaryFolderError) {
+        console.warn('Error deleting Cloudinary folders:', cloudinaryFolderError)
+        // Don't fail the entire operation if folder deletion fails
+      }
+
       return NextResponse.json({ 
         message: 'Category and all content deleted successfully',
         deletedImages: deletedImageCount,
         deletedSubcategories: deletedSubcategoryCount,
-        cloudinaryImagesDeleted: deletedImages.length
+        cloudinaryImagesDeleted: deletedImages.length,
+        cloudinaryFoldersDeleted: deletedFolders.length,
+        deletedFolders: deletedFolders
       })
 
     } catch (deleteError) {
