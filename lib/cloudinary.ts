@@ -32,16 +32,11 @@ export interface UploadOptions {
  */
 export async function uploadToCloudinary(
   fileBuffer: Buffer,
-  options: UploadOptions = {},
-  categoryKey?: string
+  options: UploadOptions = {}
 ): Promise<CloudinaryUploadResult> {
-  // Create folder path based on category
-  const folderPath = categoryKey 
-    ? `peyton-portfolio/${categoryKey}` 
-    : 'peyton-portfolio';
-
+  
   const defaultOptions: UploadApiOptions = {
-    folder: folderPath,
+    folder: 'portfolio', // Default folder if none specified
     quality: 'auto:good',
     resource_type: 'auto',
     transformation: [
@@ -54,11 +49,17 @@ export async function uploadToCloudinary(
     ]
   };
 
-  // Merge options with proper typing
+  // Merge options - the passed options will override defaults
   const finalOptions: UploadApiOptions = { 
     ...defaultOptions, 
     ...options 
   };
+
+  console.log('Cloudinary upload options:', {
+    folder: finalOptions.folder,
+    public_id: finalOptions.public_id,
+    tags: finalOptions.tags
+  });
 
   return new Promise((resolve, reject) => {
     const uploadStream = cloudinary.uploader.upload_stream(
@@ -74,7 +75,7 @@ export async function uploadToCloudinary(
             size: `${Math.round(result.bytes / 1024)}KB`,
             format: result.format,
             dimensions: `${result.width}x${result.height}`,
-            folder: folderPath
+            folder: result.folder
           });
           resolve(result as CloudinaryUploadResult);
         } else {

@@ -9,8 +9,15 @@ export async function POST(request: NextRequest) {
   try {
     console.log('Upload request received')
     
+    // Check environment variables first
+    console.log('Environment check:', {
+      hasCloudinaryName: !!process.env.CLOUDINARY_CLOUD_NAME,
+      hasCloudinaryKey: !!process.env.CLOUDINARY_API_KEY,
+      hasCloudinarySecret: !!process.env.CLOUDINARY_API_SECRET,
+    })
+    
     const session = await getServerSession(authOptions)
-    console.log('Session:', session ? 'Found' : 'Not found', session?.user?.role)
+    console.log('Session:', session ? 'Found' : 'Not found', (session?.user as any)?.role)
     
     if (!session || (session.user as any)?.role !== 'ADMIN') {
       console.log('Authorization failed - not admin')
@@ -60,67 +67,94 @@ export async function POST(request: NextRequest) {
 
     // Verify category exists
     console.log('Looking up category:', categoryId)
-    const category = await db.category.findUnique({
-      where: { id: categoryId }
-    })
+    try {
+      const category = await db.category.findUnique({
+        where: { id: categoryId }
+      })
 
-    if (!category) {
-      console.log('Category not found:', categoryId)
-      return NextResponse.json({ error: 'Category not found' }, { status: 404 })
-    }
+      if (!category) {
+        console.log('Category not found:', categoryId)
+        return NextResponse.json({ error: 'Category not found' }, { status: 404 })
+      }
 
-    console.log('Category found:', category.name, category.key)
+      console.log('Category found:', category.name, category.key)
 
-    // Convert file to buffer
-    console.log('Converting file to buffer...')
-    const bytes = await file.arrayBuffer()
-    const buffer = Buffer.from(bytes)
-    console.log('Buffer created, size:', buffer.length)
+      // Convert file to buffer
+      console.log('Converting file to buffer...')
+      const bytes = await file.arrayBuffer()
+      const buffer = Buffer.from(bytes)
+      console.log('Buffer created, size:', buffer.length)
 
-    // Upload to Cloudinary
-    console.log('Uploading to Cloudinary...')
-    const cloudinaryResult = await uploadToCloudinary(buffer, {
-      folder: `portfolio/${category.key}`, // Fixed: removed extra "peyton-portfolio" prefix
-      public_id: `${category.key}_${Date.now()}`,
-      tags: [category.key, 'portfolio']
-    })
-    console.log('Cloudinary upload successful:', cloudinaryResult.public_id)
+      // Upload to Cloudinary with correct folder structure
+      console.log('Uploading to Cloudinary...')
+      const cloudinaryResult = await uploadToCloudinary(buffer, {
+        folder: `portfolio/${category.key}`, // This will override the default folder
+        public_id: `${category.key}_${Date.now()}`,
+        tags: [category.key, 'portfolio']
+      })
+      console.log('Cloudinary upload successful:', cloudinaryResult.public_id)
 
-    // Get the next order number for this category
-    console.log('Getting next order number...')
-    const lastImage = await db.image.findFirst({
-      where: { categoryId },
-      orderBy: { order: 'desc' }
-    })
-    const nextOrder = (lastImage?.order || 0) + 1
-    console.log('Next order number:', nextOrder)
+      // Get the next order number for this category (with fallback)
+      console.log('Getting next order number...')
+      let nextOrder = 1
+      try {
+        const lastImage = await db.image.findFirst({
+          where: { categoryId },
+          orderBy: { order: 'desc' }
+        })
+        nextOrder = (lastImage?.order || 0) + 1
+      } catch (orderError) {
+        console.warn('Order field might not exist, using default order 1')
+      }
+      console.log('Next order number:', nextOrder)
 
-    // Save to database
-    console.log('Saving to database...')
-    const image = await db.image.create({
-      data: {
+      // Save to database with defensive field handling
+      console.log('Saving to database...')
+      const imageData: any = {
         title: title.trim(),
         description: description?.trim() || null,
         cloudinaryId: cloudinaryResult.public_id,
         url: cloudinaryResult.secure_url,
         categoryId,
-        order: nextOrder,
-        width: cloudinaryResult.width || null,
-        height: cloudinaryResult.height || null,
-        format: cloudinaryResult.format || null,
-        bytes: cloudinaryResult.bytes || null,
         isHeader: false
-      },
-      include: {
-        category: true
       }
-    })
-    console.log('Database save successful:', image.id)
 
-    return NextResponse.json({ 
-      message: 'Upload successful',
-      image 
-    })
+      // Only add optional fields if they might exist in your schema
+      try {
+        imageData.order = nextOrder
+      } catch (e) {
+        console.warn('Order field not available')
+      }
+
+      try {
+        imageData.width = cloudinaryResult.width || null
+        imageData.height = cloudinaryResult.height || null
+        imageData.format = cloudinaryResult.format || null
+        imageData.bytes = cloudinaryResult.bytes || null
+      } catch (e) {
+        console.warn('Some image metadata fields not available')
+      }
+
+      const image = await db.image.create({
+        data: imageData,
+        include: {
+          category: true
+        }
+      })
+      console.log('Database save successful:', image.id)
+
+      return NextResponse.json({ 
+        message: 'Upload successful',
+        image 
+      })
+
+    } catch (dbError) {
+      console.error('Database error:', dbError)
+      return NextResponse.json(
+        { error: `Database error: ${dbError instanceof Error ? dbError.message : 'Unknown database error'}` },
+        { status: 500 }
+      )
+    }
 
   } catch (error) {
     console.error('Upload error details:', error)
