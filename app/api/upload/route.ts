@@ -1,7 +1,10 @@
 import { writeFile } from "fs/promises";
 import path from "path";
 import { NextRequest, NextResponse } from "next/server";
-import cloudinary from "@/lib/cloudinary"; // ✅ Import the configured Cloudinary instance
+import cloudinary from "@/lib/cloudinary";
+
+// ✅ Force Node.js runtime so process.env works
+export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
   try {
@@ -18,7 +21,7 @@ export async function POST(req: NextRequest) {
     const tempFilePath = path.join("/tmp", file.name);
     await writeFile(tempFilePath, buffer);
 
-    const uploadResponse = await cloudinary.uploader.upload(tempFilePath); // ✅ Use configured instance
+    const uploadResponse = await cloudinary.uploader.upload(tempFilePath);
 
     return NextResponse.json({ success: true, data: uploadResponse });
   } catch (error) {
