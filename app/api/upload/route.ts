@@ -1,10 +1,11 @@
+// api/upload/route.ts
 import { writeFile } from "fs/promises";
 import path from "path";
-import { NextRequest, NextResponse } from "next/server";
-import cloudinary from "@/lib/cloudinary";
+import os from "os";
+import { NextRequest, NextResponse } from "next/server"; // ✅ Make sure this is here
+import cloudinary from "@/lib/cloudinary"; // ✅ Your configured instance
 
-// ✅ Force Vercel to run this as a Node.js server function
-export const runtime = "nodejs";
+export const runtime = "nodejs"; // ✅ Ensures it's not an Edge function
 
 export async function POST(req: NextRequest) {
   try {
@@ -18,14 +19,17 @@ export async function POST(req: NextRequest) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    const tempFilePath = path.join("/tmp", file.name);
+    const tempFilePath = path.join(os.tmpdir(), file.name); // ✅ Cross-platform
     await writeFile(tempFilePath, buffer);
+    console.log("[DEBUG] Temp file written to:", tempFilePath);
 
     const uploadResponse = await cloudinary.uploader.upload(tempFilePath);
+    console.log("[DEBUG] Cloudinary upload result:", uploadResponse);
 
     return NextResponse.json({ success: true, data: uploadResponse });
-  } catch (error) {
-    console.error("Unhandled upload error:", error);
-    return NextResponse.json({ success: false, error: "Upload failed." }, { status: 500 });
+  } catch (error: any) {
+    console.error("Unhandled upload error:", error?.message || error);
+    console.error("Stack:", error?.stack || "none");
+    return NextResponse.json({ success: false, error: error?.message || "Unknown error" }, { status: 500 });
   }
 }

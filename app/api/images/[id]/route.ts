@@ -1,3 +1,5 @@
+// app/api/images/[id]/route.ts
+
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
@@ -7,13 +9,6 @@ import cloudinary from "@/lib/cloudinary"
 
 // If none of the above work, use this direct instantiation:
 const prisma = new PrismaClient()
-
-// Configure Cloudinary
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-})
 
 export async function GET(
   request: NextRequest,

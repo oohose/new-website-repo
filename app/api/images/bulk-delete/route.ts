@@ -1,3 +1,5 @@
+// app/api/images/bulk-delete/route.ts
+
 import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 import { deleteFromCloudinary } from '@/lib/cloudinary'
