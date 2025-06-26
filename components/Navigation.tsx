@@ -1,230 +1,213 @@
 'use client'
 
-import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { useSession, signOut } from 'next-auth/react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { Menu, X, User, LogOut, Settings } from 'lucide-react'
-import { siteConfig } from '@/config/site'
+import { useEffect, useState } from 'react'
+import { usePathname } from 'next/navigation'
+import { signIn, signOut, useSession, getSession } from 'next-auth/react'
+import { toast } from 'react-hot-toast'
 
-export default function ModernNavigation() {
-  const [isOpen, setIsOpen] = useState(false)
-  const [isScrolled, setIsScrolled] = useState(false)
+export default function Navigation() {
   const { data: session } = useSession()
+  const pathname = usePathname()
+  const [isScrolled, setIsScrolled] = useState(false)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isVisible, setIsVisible] = useState(false)
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     const handleScroll = () => {
-      setIsScrolled(window.scrollY > 50)
+      setIsScrolled(window.scrollY > 10)
     }
-
     window.addEventListener('scroll', handleScroll)
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
-  const navItems = [
-    { href: '/', label: 'Home' },
-    { href: '/#portfolio', label: 'Portfolio' },
-    { href: '/about', label: 'About' },
-    { href: '/contact', label: 'Contact' },
-  ]
+  useEffect(() => {
+    if (isModalOpen) {
+      setIsVisible(true)
+    }
+  }, [isModalOpen])
 
-   return (
+  const closeModal = () => {
+    setIsVisible(false)
+    setTimeout(() => {
+      setIsModalOpen(false)
+    }, 200) // match transition duration
+  }
+
+  const hiddenPaths = ['/admin/login']
+  const shouldHideNav = hiddenPaths.includes(pathname)
+  if (shouldHideNav) return null
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+
+    try {
+      const result = await signIn('credentials', {
+        email,
+        password,
+        redirect: false,
+      })
+
+      if (result?.error) {
+        toast.error(result.error || 'Login failed')
+      } else {
+        await getSession()
+        closeModal()
+        setEmail('')
+        setPassword('')
+      }
+    } catch (err) {
+      toast.error('Something went wrong.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
     <>
-      <nav className={`fixed top-0 w-full z-50 transition-all duration-300 ${
-        isScrolled 
-          ? 'bg-white/95 backdrop-blur-sm border-b border-gray-200/50' 
-          : 'bg-transparent'
-      }`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16 lg:h-20">
-            {/* Logo - Fixed to use siteConfig */}
-            <Link href="/" className="group">
-              <motion.div
-                whileHover={{ scale: 1.05 }}
-                transition={{ duration: 0.2 }}
-                className={`text-xl lg:text-2xl font-light tracking-wide transition-colors duration-300 ${
-                  isScrolled ? 'text-gray-900' : 'text-white'
-                }`}
-              >
-                {siteConfig.photographer.name} {/* ✅ Use config instead of hard-coded name */}
-              </motion.div>
-            </Link>
-
-            {/* Desktop Navigation */}
-            <div className="hidden lg:flex items-center space-x-8">
-              {navItems.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`text-sm font-light tracking-wide transition-colors duration-300 hover:opacity-70 ${
-                    isScrolled ? 'text-gray-900' : 'text-white'
-                  }`}
-                >
-                  {item.label}
-                </Link>
-              ))}
-
-              {/* Admin/User Menu */}
-              {session ? (
-                <div className="flex items-center space-x-4">
-                  {(session.user as any)?.role === 'ADMIN' && (
-                    <Link
-                      href="/admin"
-                      className={`p-2 rounded-full transition-colors duration-300 ${
-                        isScrolled 
-                          ? 'text-gray-900 hover:bg-gray-100' 
-                          : 'text-white hover:bg-white/10'
-                      }`}
-                      title="Admin Panel"
-                    >
-                      <Settings className="w-4 h-4" />
-                    </Link>
-                  )}
-                  <button
-                    onClick={() => signOut()}
-                    className={`p-2 rounded-full transition-colors duration-300 ${
-                      isScrolled 
-                        ? 'text-gray-900 hover:bg-gray-100' 
-                        : 'text-white hover:bg-white/10'
-                    }`}
-                    title="Sign Out"
-                  >
-                    <LogOut className="w-4 h-4" />
-                  </button>
-                </div>
-              ) : (
-                <Link
-                  href="/admin/signin"
-                  className={`p-2 rounded-full transition-colors duration-300 ${
-                    isScrolled 
-                      ? 'text-gray-900 hover:bg-gray-100' 
-                      : 'text-white hover:bg-white/10'
-                  }`}
-                  title="Admin Sign In"
-                >
-                  <User className="w-4 h-4" />
-                </Link>
-              )}
-            </div>
-
-            {/* Mobile menu button */}
-            <button
-              onClick={() => setIsOpen(!isOpen)}
-              className={`lg:hidden p-2 rounded-md transition-colors duration-300 ${
-                isScrolled 
-                  ? 'text-gray-900 hover:bg-gray-100' 
-                  : 'text-white hover:bg-white/10'
+      {/* Navbar */}
+      <nav
+        className={`fixed top-0 left-0 right-0 z-30 transition-all duration-300 backdrop-blur-md border-b ${
+          isScrolled
+            ? 'bg-white/10 border-white/10 shadow-sm'
+            : 'bg-transparent border-transparent'
+        }`}
+      >
+        <div className="w-full px-6 py-4 flex items-center justify-between">
+          <Link href="/" className="text-white">
+            <h1
+              className={`text-xl font-bold transition-all ${
+                isScrolled ? 'drop-shadow-md' : ''
               }`}
             >
-              {isOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-            </button>
+              Peyton Snipes
+            </h1>
+          </Link>
+
+          <div className="flex items-center space-x-4">
+            {pathname !== '/' && (
+              <Link href="/">
+                <span
+                  className={`text-sm font-medium transition-all px-4 py-2 rounded-md ${
+                    isScrolled
+                      ? 'bg-white/10 border border-white/20 text-white hover:bg-white/20'
+                      : 'text-white hover:bg-white/10'
+                  }`}
+                >
+                  Home
+                </span>
+              </Link>
+            )}
+
+            {session && (
+              <Link href="/admin">
+                <span
+                  className={`text-sm font-medium transition-all px-4 py-2 rounded-md ${
+                    isScrolled
+                      ? 'bg-white/10 border border-white/20 text-white hover:bg-white/20'
+                      : 'text-white hover:bg-white/10'
+                  }`}
+                >
+                  Admin Panel
+                </span>
+              </Link>
+            )}
+
+            {session ? (
+              <button
+                onClick={() => signOut()}
+                className={`text-sm font-medium transition-all px-4 py-2 rounded-md ${
+                  isScrolled
+                    ? 'bg-white/10 border border-white/20 text-white hover:bg-white/20'
+                    : 'text-white hover:bg-white/10'
+                }`}
+              >
+                Logout
+              </button>
+            ) : (
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className={`text-sm font-medium transition-all px-4 py-2 rounded-md ${
+                  isScrolled
+                    ? 'bg-white/10 border border-white/20 text-white hover:bg-white/20'
+                    : 'text-white hover:bg-white/10'
+                }`}
+              >
+                Login
+              </button>
+            )}
           </div>
         </div>
       </nav>
 
-      {/* Mobile Menu */}
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-40 lg:hidden"
+      {/* Login Modal with animation */}
+      {isModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+          onClick={closeModal}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className={`bg-neutral-900 text-white rounded-xl p-8 w-full max-w-lg border border-white/10 shadow-2xl transform transition-all duration-200 ${
+              isVisible
+                ? 'opacity-100 scale-100'
+                : 'opacity-0 scale-95 pointer-events-none'
+            }`}
           >
-            {/* Backdrop */}
-            <div
-              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-              onClick={() => setIsOpen(false)}
-            />
-
-            {/* Menu Panel */}
-            <motion.div
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ duration: 0.3, ease: 'easeInOut' }}
-              className="absolute right-0 top-0 h-full w-80 bg-white shadow-xl"
-            >
-              <div className="flex flex-col h-full">
-                {/* Header */}
-                <div className="flex items-center justify-between p-6 border-b border-gray-200">
-                  <h2 className="text-lg font-light text-gray-900">Menu</h2>
-                  <button
-                    onClick={() => setIsOpen(false)}
-                    className="p-2 rounded-md text-gray-500 hover:bg-gray-100 transition-colors"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-
-                {/* Navigation Links */}
-                <div className="flex-1 py-6">
-                  <div className="space-y-1">
-                    {navItems.map((item) => (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        onClick={() => setIsOpen(false)}
-                        className="block px-6 py-3 text-gray-900 hover:bg-gray-50 transition-colors duration-200 font-light"
-                      >
-                        {item.label}
-                      </Link>
-                    ))}
-                  </div>
-
-                  {/* Auth Section */}
-                  <div className="mt-8 pt-8 border-t border-gray-200">
-                    {session ? (
-                      <div className="space-y-1">
-                        <div className="px-6 py-2">
-                          <p className="text-sm font-medium text-gray-900">
-                            {(session.user as any)?.name || session.user?.email}
-                          </p>
-                          <p className="text-xs text-gray-500 capitalize">
-                            {(session.user as any)?.role?.toLowerCase() || 'user'}
-                          </p>
-                        </div>
-                        
-                        {(session.user as any)?.role === 'ADMIN' && (
-                          <Link
-                            href="/admin"
-                            onClick={() => setIsOpen(false)}
-                            className="flex items-center px-6 py-3 text-gray-700 hover:bg-gray-50 transition-colors"
-                          >
-                            <Settings className="w-4 h-4 mr-3" />
-                            Admin Panel
-                          </Link>
-                        )}
-                        
-                        <button
-                          onClick={() => {
-                            signOut()
-                            setIsOpen(false)
-                          }}
-                          className="flex items-center w-full px-6 py-3 text-gray-700 hover:bg-gray-50 transition-colors"
-                        >
-                          <LogOut className="w-4 h-4 mr-3" />
-                          Sign Out
-                        </button>
-                      </div>
-                    ) : (
-                      <Link
-                        href="/admin/signin"
-                        onClick={() => setIsOpen(false)}
-                        className="flex items-center px-6 py-3 text-gray-700 hover:bg-gray-50 transition-colors"
-                      >
-                        <User className="w-4 h-4 mr-3" />
-                        Admin Sign In
-                      </Link>
-                    )}
-                  </div>
-                </div>
+            <h2 className="text-xl font-semibold mb-6 text-white">Admin Login</h2>
+            <form onSubmit={handleLogin} className="space-y-5">
+              <div>
+                <label htmlFor="admin-email" className="block text-sm mb-1 text-white/80">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  id="admin-email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full px-4 py-2 bg-transparent text-white border-2 border-white/20 rounded-md placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-blue-500 hover:border-purple-500 transition-all"
+                  placeholder="admin@example.com"
+                  required
+                />
               </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              <div>
+                <label htmlFor="admin-password" className="block text-sm mb-1 text-white/80">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  id="admin-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full px-4 py-2 bg-transparent text-white border-2 border-white/20 rounded-md placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-blue-500 hover:border-purple-500 transition-all"
+                  placeholder="••••••••"
+                  required
+                />
+              </div>
+              <div className="flex justify-between items-center mt-6">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-5 py-2.5 bg-white/10 border border-white/20 rounded-md hover:bg-white/20 transition-colors text-white"
+                >
+                  {loading ? 'Signing in…' : 'Sign In'}
+                </button>
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="text-sm text-white/60 hover:text-white/90 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </>
   )
 }

@@ -1,4 +1,4 @@
-/* Full ImageManager.tsx with Edit Modal and Restore of Bulk Delete + Filtering */
+/* Full ImageManager.tsx with ModalWrapper integration */
 
 'use client'
 
@@ -20,7 +20,8 @@ import {
 } from 'lucide-react'
 import Image from 'next/image'
 import toast from 'react-hot-toast'
-import ImageDeleteButton from '@/components/ui/ImageDeleteButton'
+import ImageDeleteButton from '@/components/ImageDeleteButton'
+import ModalWrapper from '@/components/ui/ModalWrapper'
 import { Category, Image as ImageType } from '@/lib/types'
 
 interface ImageManagerProps {
@@ -58,70 +59,63 @@ function ImageEditModal({ image, onClose, onSave, isSaving }: {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        className="bg-gray-800 rounded-2xl border border-gray-700 shadow-2xl w-full max-w-md"
-      >
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <h3 className="text-lg font-semibold text-white mb-4">Edit Image</h3>
+    <ModalWrapper isOpen={true} onClose={onClose}>
+      <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <h3 className="text-lg font-semibold text-white mb-4">Edit Image</h3>
+
+        <input
+          type="text"
+          value={formData.title}
+          onChange={(e) => handleChange('title', e.target.value)}
+          className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
+          placeholder="Title"
+        />
+
+        <textarea
+          value={formData.description}
+          onChange={(e) => handleChange('description', e.target.value)}
+          className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
+          placeholder="Description"
+          rows={3}
+        />
+
+        <div className="flex items-center space-x-2">
+          <label className="text-sm text-white flex items-center space-x-2">
+            <input
+              type="checkbox"
+              checked={formData.isHeader}
+              onChange={(e) => handleChange('isHeader', e.target.checked)}
+            />
+            <span>Is Header</span>
+          </label>
 
           <input
-            type="text"
-            value={formData.title}
-            onChange={(e) => handleChange('title', e.target.value)}
-            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
-            placeholder="Title"
+            type="number"
+            value={formData.displayOrder}
+            onChange={(e) => handleChange('displayOrder', parseInt(e.target.value))}
+            className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white w-24"
+            placeholder="Order"
           />
+        </div>
 
-          <textarea
-            value={formData.description}
-            onChange={(e) => handleChange('description', e.target.value)}
-            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
-            placeholder="Description"
-            rows={3}
-          />
-
-          <div className="flex items-center space-x-2">
-            <label className="text-sm text-white flex items-center space-x-2">
-              <input
-                type="checkbox"
-                checked={formData.isHeader}
-                onChange={(e) => handleChange('isHeader', e.target.checked)}
-              />
-              <span>Is Header</span>
-            </label>
-
-            <input
-              type="number"
-              value={formData.displayOrder}
-              onChange={(e) => handleChange('displayOrder', parseInt(e.target.value))}
-              className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white w-24"
-              placeholder="Order"
-            />
-          </div>
-
-          <div className="flex justify-end space-x-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isSaving}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
-            >
-              {isSaving ? 'Saving...' : 'Save'}
-            </button>
-          </div>
-        </form>
-      </motion.div>
-    </div>
+        <div className="flex justify-end space-x-3 pt-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={isSaving}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+          >
+            {isSaving ? 'Saving...' : 'Save'}
+          </button>
+        </div>
+      </form>
+    </ModalWrapper>
   )
 }
 
@@ -249,7 +243,7 @@ export default function ImageManager({ categories }: ImageManagerProps) {
           <span className="text-white">Selected: {selectedImages.size}</span>
           <button
             onClick={() => setShowBulkDelete(true)}
-            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg"
+            className="inline-flex items-center px-4 py-2 text-sm font-medium text-red-300 bg-red-600/20 border border-red-500/30 rounded-md hover:bg-red-600/30 hover:border-red-500/50 transition-colors"
           >
             Delete Selected
           </button>
@@ -301,47 +295,38 @@ export default function ImageManager({ categories }: ImageManagerProps) {
         ))}
       </div>
 
-      <AnimatePresence>
-        {editImage && (
-          <ImageEditModal
-            image={editImage}
-            onClose={() => setEditImage(null)}
-            onSave={handleImageUpdate}
-            isSaving={isSaving}
-          />
-        )}
-      </AnimatePresence>
+      {/* Edit Modal */}
+      {editImage && (
+        <ImageEditModal
+          image={editImage}
+          onClose={() => setEditImage(null)}
+          onSave={handleImageUpdate}
+          isSaving={isSaving}
+        />
+      )}
 
-      <AnimatePresence>
-        {showBulkDelete && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex justify-center items-center z-50">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-gray-800 p-6 rounded-xl border border-gray-600 max-w-md w-full"
+      {/* Bulk Delete Modal */}
+      <ModalWrapper isOpen={showBulkDelete} onClose={() => setShowBulkDelete(false)}>
+        <div className="p-6">
+          <h3 className="text-white text-lg font-bold mb-4">Confirm Bulk Delete</h3>
+          <p className="text-gray-300 mb-6">Are you sure you want to delete {selectedImages.size} selected images? This cannot be undone.</p>
+          <div className="flex justify-end space-x-3">
+            <button
+              onClick={() => setShowBulkDelete(false)}
+              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg"
             >
-              <h3 className="text-white text-lg font-bold mb-4">Confirm Bulk Delete</h3>
-              <p className="text-gray-300 mb-6">Are you sure you want to delete {selectedImages.size} selected images? This cannot be undone.</p>
-              <div className="flex justify-end space-x-3">
-                <button
-                  onClick={() => setShowBulkDelete(true)}
-                  className="inline-flex items-center px-4 py-2 text-sm font-medium text-red-300 bg-red-600/20 border border-red-500/30 rounded-md hover:bg-red-600/30 hover:border-red-500/50 transition-colors"
-                >
-                  <Trash2 className="w-4 h-4 mr-2" /> Delete Selected
-                </button>
-                <button
-                  onClick={handleBulkDelete}
-                  disabled={isBulkDeleting}
-                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg"
-                >
-                  {isBulkDeleting ? 'Deleting...' : 'Delete'}
-                </button>
-              </div>
-            </motion.div>
+              Cancel
+            </button>
+            <button
+              onClick={handleBulkDelete}
+              disabled={isBulkDeleting}
+              className="inline-flex items-center px-4 py-2 text-sm font-medium text-red-300 bg-red-600/20 border border-red-500/30 rounded-md hover:bg-red-600/30 hover:border-red-500/50 transition-colors"
+            >
+              {isBulkDeleting ? 'Deleting...' : 'Delete'}
+            </button>
           </div>
-        )}
-      </AnimatePresence>
+        </div>
+      </ModalWrapper>
     </div>
   )
 }

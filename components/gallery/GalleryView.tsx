@@ -6,6 +6,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { ArrowLeft, X, ChevronLeft, ChevronRight, Edit } from 'lucide-react'
 import EditCategoryModal from '@/components/EditCategoryModal'
+import ModalWrapper from '@/components/ui/ModalWrapper'
 import { Category, Image as ImageType } from '@/lib/types'
 
 interface DarkElegantGalleryViewProps {
@@ -184,7 +185,7 @@ export default function DarkElegantGalleryView({ category, isAdmin, onRefresh }:
           )}
 
           {/* Content */}
-          <div className="relative z-10 text-center max-w-4xl mx-auto">
+          <div className="relative z-10 text-center max-w-4xl mx-auto pt-40 sm:pt-52">
             {/* Navigation Buttons - Stacked vertically on the left */}
             <div className="absolute top-0 left-0 -mt-20 flex flex-col space-y-4">
               {/* Back Button - Top */}
@@ -429,18 +430,16 @@ export default function DarkElegantGalleryView({ category, isAdmin, onRefresh }:
       </div>
 
       {/* Edit Category Modal */}
-      <AnimatePresence>
-        {isEditModalOpen && (
-          <EditCategoryModal
-            isOpen={isEditModalOpen}
-            onClose={handleCloseEdit}
-            category={editingCategory}
-            onSuccess={handleEditSuccess}
-          />
-        )}
-      </AnimatePresence>
+      {isEditModalOpen && (
+        <EditCategoryModal
+          isOpen={isEditModalOpen}
+          onClose={handleCloseEdit}
+          category={editingCategory}
+          onSuccess={handleEditSuccess}
+        />
+      )}
 
-      {/* Lightbox Modal */}
+      {/* Lightbox Modal - Custom Full Screen Implementation */}
       <AnimatePresence>
         {selectedImage && (
           <motion.div
@@ -462,6 +461,11 @@ export default function DarkElegantGalleryView({ category, isAdmin, onRefresh }:
               {/* Keyboard Navigation Hint */}
               <div className="fixed top-4 left-4 md:top-6 md:left-6 z-20 text-white/60 text-xs md:text-sm bg-black/40 backdrop-blur-sm px-3 py-2 rounded-full border border-white/10">
                 ← → to navigate • ESC to close
+              </div>
+
+              {/* Image Counter */}
+              <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-20 text-white/60 text-sm bg-black/40 backdrop-blur-sm px-3 py-2 rounded-full border border-white/10">
+                {currentImageIndex + 1} / {galleryImages.length}
               </div>
 
               {/* Image Container */}

@@ -18,10 +18,8 @@ export async function GET(request: NextRequest) {
     // Build the where clause for categories
     let categoryWhere: any = {}
     
-    if (publicOnly && !includePrivate) {
-      categoryWhere.isPrivate = false
-    } else if (includePrivate && !isAdmin) {
-      categoryWhere.isPrivate = false
+    if (!isAdmin) {
+  categoryWhere.isPrivate = false
     }
 
     if (categoryId) {

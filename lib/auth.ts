@@ -14,9 +14,21 @@ export const authOptions: NextAuthOptions = {
         password: { label: 'Password', type: 'password' }
       },
       async authorize(credentials) {
+        console.log('🔑 credentials.email:', credentials?.email)
+        console.log('🔑 credentials.password:', credentials?.password)
+        console.log('🔐 ENV ADMIN_EMAIL:', process.env.ADMIN_EMAIL)
+        console.log('🔐 ENV ADMIN_PASSWORD:', process.env.ADMIN_PASSWORD)
+
         if (!credentials?.email || !credentials?.password) {
+          console.log('❌ Missing credentials')
           return null
         }
+
+        const isAdminEmail = credentials.email === process.env.ADMIN_EMAIL
+        const isAdminPass = credentials.password === process.env.ADMIN_PASSWORD
+
+        console.log('✅ email match:', isAdminEmail)
+        console.log('✅ password match:', isAdminPass)
 
         // Check if this is the admin login
         if (
@@ -39,7 +51,7 @@ export const authOptions: NextAuthOptions = {
           }
 
           return {
-            id: adminUser.id,
+            id: adminUser.id.toString(),
             email: adminUser.email,
             name: adminUser.name,
             role: adminUser.role
@@ -74,7 +86,17 @@ export const authOptions: NextAuthOptions = {
         session.user.role = token.role as string
       }
       return session
-    }
+    },
+    async redirect({ url, baseUrl }) {
+    // allow relative callback URLs like /gallery/xyz
+    if (url.startsWith('/')) return url
+
+    // allow same-origin absolute URLs
+    if (url.startsWith(baseUrl)) return url
+
+    // fallback to homepage
+    return baseUrl
+  }
   },
   session: {
     strategy: 'jwt'
