@@ -4,13 +4,6 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { uploadToCloudinary } from '@/lib/cloudinary'
-import { v2 as cloudinary } from 'cloudinary'
-
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-})
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,6 +14,7 @@ export async function POST(request: NextRequest) {
       hasCloudinaryName: !!process.env.CLOUDINARY_CLOUD_NAME,
       hasCloudinaryKey: !!process.env.CLOUDINARY_API_KEY,
       hasCloudinarySecret: !!process.env.CLOUDINARY_API_SECRET,
+      cloudinaryName: process.env.CLOUDINARY_CLOUD_NAME, // Log the actual value
     })
     
     const session = await getServerSession(authOptions)
