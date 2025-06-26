@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { PrismaClient } from '@prisma/client'
-import { v2 as cloudinary } from 'cloudinary'
+import cloudinary from "@/lib/cloudinary"
 
 // If none of the above work, use this direct instantiation:
 const prisma = new PrismaClient()

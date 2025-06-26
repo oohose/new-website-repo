@@ -3,7 +3,7 @@ import path from "path";
 import { NextRequest, NextResponse } from "next/server";
 import cloudinary from "@/lib/cloudinary";
 
-// ✅ Force Node.js runtime so process.env works
+// ✅ Force Vercel to run this as a Node.js server function
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
