@@ -1,5 +1,11 @@
 import { v2 as cloudinary, UploadApiOptions } from 'cloudinary';
 
+console.log("[DEBUG] CLOUDINARY CONFIG:", {
+  CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME,
+  API_KEY: process.env.CLOUDINARY_API_KEY,
+  API_SECRET: process.env.CLOUDINARY_API_SECRET ? "***" : "undefined",
+});
+
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_NAME!,
   api_key: process.env.CLOUDINARY_API_KEY!,
