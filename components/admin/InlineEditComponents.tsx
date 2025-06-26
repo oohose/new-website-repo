@@ -574,7 +574,15 @@ function CategoryEditModal({ isOpen, onClose, category, categories, onSave }: Ca
     key: '',
     description: '',
     isPrivate: false,
-    parentId: ''
+    parentId: '',
+    socialLinks: {
+      instagram: '',
+      twitter: '',
+      tiktok: '',
+      youtube: '',
+      website: '',
+      linkedin: ''
+    }
   })
   const [isLoading, setIsLoading] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -586,7 +594,15 @@ function CategoryEditModal({ isOpen, onClose, category, categories, onSave }: Ca
         key: category.key,
         description: category.description || '',
         isPrivate: category.isPrivate,
-        parentId: category.parentId || ''
+        parentId: category.parentId || '',
+        socialLinks: {
+          instagram: (category as any).socialLinks?.instagram || '',
+          twitter: (category as any).socialLinks?.twitter || '',
+          tiktok: (category as any).socialLinks?.tiktok || '',
+          youtube: (category as any).socialLinks?.youtube || '',
+          website: (category as any).socialLinks?.website || '',
+          linkedin: (category as any).socialLinks?.linkedin || ''
+        }
       })
     } else {
       setFormData({
@@ -594,7 +610,15 @@ function CategoryEditModal({ isOpen, onClose, category, categories, onSave }: Ca
         key: '',
         description: '',
         isPrivate: false,
-        parentId: ''
+        parentId: '',
+        socialLinks: {
+          instagram: '',
+          twitter: '',
+          tiktok: '',
+          youtube: '',
+          website: '',
+          linkedin: ''
+        }
       })
     }
     setErrors({})
@@ -638,10 +662,21 @@ function CategoryEditModal({ isOpen, onClose, category, categories, onSave }: Ca
   }
 
   const handleInputChange = (field: string, value: string | boolean) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }))
+    if (field.startsWith('socialLinks.')) {
+      const socialPlatform = field.split('.')[1]
+      setFormData(prev => ({
+        ...prev,
+        socialLinks: {
+          ...prev.socialLinks,
+          [socialPlatform]: value as string
+        }
+      }))
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [field]: value
+      }))
+    }
     
     // Clear error when user starts typing
     if (errors[field]) {
@@ -652,12 +687,21 @@ function CategoryEditModal({ isOpen, onClose, category, categories, onSave }: Ca
     }
   }
 
+  const socialMediaPlatforms = [
+    { key: 'instagram', label: 'Instagram', placeholder: '@username or full URL', icon: '📷' },
+    { key: 'twitter', label: 'Twitter/X', placeholder: '@username or full URL', icon: '🐦' },
+    { key: 'tiktok', label: 'TikTok', placeholder: '@username or full URL', icon: '🎵' },
+    { key: 'youtube', label: 'YouTube', placeholder: '@username or full URL', icon: '📺' },
+    { key: 'linkedin', label: 'LinkedIn', placeholder: 'Profile URL', icon: '💼' },
+    { key: 'website', label: 'Website', placeholder: 'https://website.com', icon: '🌐' }
+  ]
+
   const availableParentCategories = categories.filter(cat => 
     !cat.parentId && (!category || cat.id !== category.id)
   )
 
   return (
-    <ModalWrapper isOpen={isOpen} onClose={onClose} className="max-w-2xl max-h-[90vh] overflow-y-auto">
+    <ModalWrapper isOpen={isOpen} onClose={onClose} className="max-w-3xl max-h-[90vh] overflow-y-auto">
       <div className="flex items-center justify-between p-6 border-b border-gray-700">
         <h3 className="text-xl font-semibold text-white">
           {category ? 'Edit Category' : 'Create Category'}
@@ -671,81 +715,111 @@ function CategoryEditModal({ isOpen, onClose, category, categories, onSave }: Ca
       </div>
 
       <form onSubmit={handleSubmit} className="p-6 space-y-6">
-        <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            Category Name *
-          </label>
-          <input
-            type="text"
-            required
-            value={formData.name}
-            onChange={(e) => handleInputChange('name', e.target.value)}
-            className={`w-full px-3 py-2 bg-gray-700 border rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 ${
-              errors.name 
-                ? 'border-red-500 focus:ring-red-500' 
-                : 'border-gray-600 focus:ring-blue-500'
-            }`}
-            placeholder="e.g., Wedding Photography"
-            disabled={isLoading}
-          />
-          {errors.name && (
-            <p className="mt-1 text-sm text-red-400">{errors.name}</p>
-          )}
+        {/* Basic Information */}
+        <div className="space-y-4">
+          <h4 className="text-lg font-medium text-white border-b border-gray-700 pb-2">Basic Information</h4>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Category Name *
+            </label>
+            <input
+              type="text"
+              required
+              value={formData.name}
+              onChange={(e) => handleInputChange('name', e.target.value)}
+              className={`w-full px-3 py-2 bg-gray-700 border rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 ${
+                errors.name 
+                  ? 'border-red-500 focus:ring-red-500' 
+                  : 'border-gray-600 focus:ring-blue-500'
+              }`}
+              placeholder="e.g., Wedding Photography"
+              disabled={isLoading}
+            />
+            {errors.name && (
+              <p className="mt-1 text-sm text-red-400">{errors.name}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              URL Key
+            </label>
+            <input
+              type="text"
+              value={formData.key}
+              onChange={(e) => handleInputChange('key', e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+              className={`w-full px-3 py-2 bg-gray-700 border rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 ${
+                errors.key 
+                  ? 'border-red-500 focus:ring-red-500' 
+                  : 'border-gray-600 focus:ring-blue-500'
+              }`}
+              placeholder="wedding-photography (auto-generated if empty)"
+              disabled={isLoading}
+            />
+            {errors.key && (
+              <p className="mt-1 text-sm text-red-400">{errors.key}</p>
+            )}
+            <p className="mt-1 text-xs text-gray-400">
+              Used in URLs: /gallery/{formData.key || 'your-key'}
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Parent Category (Optional)
+            </label>
+            <select
+              value={formData.parentId}
+              onChange={(e) => handleInputChange('parentId', e.target.value)}
+              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={isLoading}
+            >
+              <option value="">None (Top-level category)</option>
+              {availableParentCategories.map(cat => (
+                <option key={cat.id} value={cat.id}>{cat.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Description
+            </label>
+            <textarea
+              value={formData.description}
+              onChange={(e) => handleInputChange('description', e.target.value)}
+              rows={4}
+              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              placeholder="Describe this category..."
+              disabled={isLoading}
+            />
+          </div>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            URL Key
-          </label>
-          <input
-            type="text"
-            value={formData.key}
-            onChange={(e) => handleInputChange('key', e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-            className={`w-full px-3 py-2 bg-gray-700 border rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 ${
-              errors.key 
-                ? 'border-red-500 focus:ring-red-500' 
-                : 'border-gray-600 focus:ring-blue-500'
-            }`}
-            placeholder="wedding-photography (auto-generated if empty)"
-            disabled={isLoading}
-          />
-          {errors.key && (
-            <p className="mt-1 text-sm text-red-400">{errors.key}</p>
-          )}
-          <p className="mt-1 text-xs text-gray-400">
-            Used in URLs: /gallery/{formData.key || 'your-key'}
-          </p>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            Parent Category (Optional)
-          </label>
-          <select
-            value={formData.parentId}
-            onChange={(e) => handleInputChange('parentId', e.target.value)}
-            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            disabled={isLoading}
-          >
-            <option value="">None (Top-level category)</option>
-            {availableParentCategories.map(cat => (
-              <option key={cat.id} value={cat.id}>{cat.name}</option>
+        {/* Social Media Links */}
+        <div className="space-y-4">
+          <h4 className="text-lg font-medium text-white border-b border-gray-700 pb-2">Social Media Links</h4>
+          <p className="text-sm text-gray-400">Add social media links for models or clients featured in this category</p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {socialMediaPlatforms.map((platform) => (
+              <div key={platform.key}>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  <span className="mr-2">{platform.icon}</span>
+                  {platform.label}
+                </label>
+                <input
+                  type="text"
+                  value={formData.socialLinks[platform.key as keyof typeof formData.socialLinks]}
+                  onChange={(e) => handleInputChange(`socialLinks.${platform.key}`, e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder={platform.placeholder}
+                  disabled={isLoading}
+                />
+              </div>
             ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            Description
-          </label>
-          <textarea
-            value={formData.description}
-            onChange={(e) => handleInputChange('description', e.target.value)}
-            rows={4}
-            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-            placeholder="Describe this category..."
-            disabled={isLoading}
-          />
+          </div>
         </div>
 
         {/* Privacy Toggle */}

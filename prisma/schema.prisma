@@ -68,6 +68,7 @@ model Category {
   images         Image[]
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
+  socialLinks Json?
 }
 
 model Image {

@@ -67,14 +67,14 @@ export async function PUT(
     console.log('PUT request received for category ID:', params.id)
     
     const session = await getServerSession(authOptions)
-    if (!session?.user || (session.user as any).role !== 'ADMIN') {
+    if (!session?.user || (session.user as any)?.role !== 'ADMIN') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const body = await request.json()
     console.log('Request body:', body)
     
-    const { name, description, key, isPrivate, parentId } = body
+    const { name, description, key, isPrivate, parentId, socialLinks } = body
 
     // Validate required fields
     if (!name?.trim()) {
@@ -100,17 +100,40 @@ export async function PUT(
       }
     }
 
+    // Prepare the base update data
+    const updateData: any = {
+      name: name.trim(),
+      description: description?.trim() || null,
+      key: key?.trim() || existingCategory.key,
+      isPrivate: Boolean(isPrivate),
+      parentId: parentId || null,
+      updatedAt: new Date()
+    }
+
+    // Only add socialLinks if it exists and the database supports it
+    if (socialLinks && typeof socialLinks === 'object') {
+      try {
+        const cleanSocialLinks = Object.fromEntries(
+          Object.entries(socialLinks).filter(([_, value]) => 
+            value && typeof value === 'string' && value.trim() !== ''
+          )
+        )
+        
+        if (Object.keys(cleanSocialLinks).length > 0) {
+          updateData.socialLinks = cleanSocialLinks
+        } else {
+          updateData.socialLinks = null
+        }
+      } catch (error) {
+        console.warn('socialLinks field not supported, skipping...', error)
+        // Continue without socialLinks if there's an issue
+      }
+    }
+
     // Update category
     const updatedCategory = await prisma.category.update({
       where: { id: params.id },
-      data: {
-        name: name.trim(),
-        description: description?.trim() || null,
-        key: key?.trim() || existingCategory.key,
-        isPrivate: Boolean(isPrivate),
-        parentId: parentId || null,
-        updatedAt: new Date()
-      },
+      data: updateData,
       include: {
         images: {
           orderBy: { createdAt: 'desc' }

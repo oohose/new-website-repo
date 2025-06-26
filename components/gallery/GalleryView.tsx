@@ -4,15 +4,146 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Image from 'next/image'
 import Link from 'next/link'
-import { ArrowLeft, X, ChevronLeft, ChevronRight, Edit } from 'lucide-react'
+import { ArrowLeft, X, ChevronLeft, ChevronRight, Edit, ExternalLink } from 'lucide-react'
 import EditCategoryModal from '@/components/EditCategoryModal'
-import ModalWrapper from '@/components/ui/ModalWrapper'
 import { Category, Image as ImageType } from '@/lib/types'
 
 interface DarkElegantGalleryViewProps {
   category: Category
   isAdmin: boolean
   onRefresh?: () => Promise<void>
+}
+
+interface SocialMediaLinksProps {
+  socialLinks: {
+    instagram?: string
+    twitter?: string
+    tiktok?: string
+    youtube?: string
+    linkedin?: string
+    website?: string
+  }
+  className?: string
+}
+
+function SocialMediaLinks({ socialLinks, className = '' }: SocialMediaLinksProps) {
+  // Helper function to format URLs
+  const formatUrl = (platform: string, value: string): string => {
+    if (!value) return ''
+    
+    // If it's already a full URL, return as is
+    if (value.startsWith('http://') || value.startsWith('https://')) {
+      return value
+    }
+    
+    // Handle @username format or just username
+    const username = value.replace('@', '')
+    
+    switch (platform) {
+      case 'instagram':
+        return `https://instagram.com/${username}`
+      case 'twitter':
+        return `https://twitter.com/${username}`
+      case 'tiktok':
+        return `https://tiktok.com/@${username}`
+      case 'youtube':
+        return `https://youtube.com/@${username}`
+      case 'linkedin':
+        return value.includes('linkedin.com') ? value : `https://linkedin.com/in/${username}`
+      case 'website':
+        return value.startsWith('www.') ? `https://${value}` : value
+      default:
+        return value
+    }
+  }
+
+  // Define social media platforms with their icons and colors
+  const platforms = [
+    {
+      key: 'instagram',
+      label: 'Instagram',
+      icon: '📷',
+      color: 'from-purple-500 to-pink-500',
+      hoverColor: 'hover:from-purple-600 hover:to-pink-600'
+    },
+    {
+      key: 'twitter',
+      label: 'Twitter',
+      icon: '🐦',
+      color: 'from-blue-400 to-blue-600',
+      hoverColor: 'hover:from-blue-500 hover:to-blue-700'
+    },
+    {
+      key: 'tiktok',
+      label: 'TikTok',
+      icon: '🎵',
+      color: 'from-black to-gray-800',
+      hoverColor: 'hover:from-gray-800 hover:to-black'
+    },
+    {
+      key: 'youtube',
+      label: 'YouTube',
+      icon: '📺',
+      color: 'from-red-500 to-red-700',
+      hoverColor: 'hover:from-red-600 hover:to-red-800'
+    },
+    {
+      key: 'linkedin',
+      label: 'LinkedIn',
+      icon: '💼',
+      color: 'from-blue-600 to-blue-800',
+      hoverColor: 'hover:from-blue-700 hover:to-blue-900'
+    },
+    {
+      key: 'website',
+      label: 'Website',
+      icon: '🌐',
+      color: 'from-gray-600 to-gray-800',
+      hoverColor: 'hover:from-gray-700 hover:to-gray-900'
+    }
+  ]
+
+  // Filter platforms that have links
+  const availableLinks = platforms.filter(platform => 
+    socialLinks[platform.key as keyof typeof socialLinks]
+  )
+
+  if (availableLinks.length === 0) return null
+
+  return (
+    <div className={`space-y-4 ${className}`}>
+      <h3 className="text-lg font-semibold text-white flex items-center justify-center space-x-2">
+        <ExternalLink className="w-5 h-5" />
+        <span>Connect</span>
+      </h3>
+      
+      <div className="flex flex-wrap justify-center gap-3">
+        {availableLinks.map(platform => {
+          const url = formatUrl(platform.key, socialLinks[platform.key as keyof typeof socialLinks] || '')
+          
+          return (
+            <a
+              key={platform.key}
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`
+                inline-flex items-center space-x-2 px-4 py-2 rounded-full
+                bg-gradient-to-r ${platform.color} ${platform.hoverColor}
+                text-white text-sm font-medium
+                transition-all duration-200 transform hover:scale-105
+                shadow-lg hover:shadow-xl
+              `}
+            >
+              <span>{platform.icon}</span>
+              <span>{platform.label}</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          )
+        })}
+      </div>
+    </div>
+  )
 }
 
 export default function DarkElegantGalleryView({ category, isAdmin, onRefresh }: DarkElegantGalleryViewProps) {
@@ -524,7 +655,7 @@ export default function DarkElegantGalleryView({ category, isAdmin, onRefresh }:
   )
 }
 
-// Separate component for header content to avoid duplication
+// Separate component for header content with social media integration
 function HeaderContent({ category, isAdmin }: { category: Category, isAdmin: boolean }) {
   return (
     <motion.div
@@ -556,6 +687,18 @@ function HeaderContent({ category, isAdmin }: { category: Category, isAdmin: boo
               {category.description}
             </p>
           </div>
+        </motion.div>
+      )}
+
+      {/* Social Media Links */}
+      {(category as any).socialLinks && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, delay: 0.6 }}
+          className="max-w-2xl mx-auto"
+        >
+          <SocialMediaLinks socialLinks={(category as any).socialLinks} />
         </motion.div>
       )}
 
