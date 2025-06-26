@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
 
         // Upload to Cloudinary
         const cloudinaryResult = await uploadToCloudinary(buffer, {
-          folder: `peyton-portfolio/${category.key}`,
+          folder: `portfolio/${category.key}`,
           public_id: `${category.key}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           tags: ['peyton-portfolio', category.key]
         })
