@@ -597,11 +597,6 @@ export default function DarkElegantGalleryView({ category, isAdmin, onRefresh }:
                 ← → to navigate • ESC to close
               </div>
 
-              {/* Image Counter */}
-              <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-20 text-white/60 text-sm bg-black/40 backdrop-blur-sm px-3 py-2 rounded-full border border-white/10">
-                {currentImageIndex + 1} / {galleryImages.length}
-              </div>
-
               {/* Image Container */}
               <motion.div
                 key={selectedImage.id}
