@@ -1,6 +1,6 @@
 export const siteConfig = {
   name: "Peyton's Photography",
-  description: "Professional photography services capturing life's most precious moments with artistic vision and technical excellence.",
+  description: "",
   
   photographer: {
     name: "Peyton Snipes",
