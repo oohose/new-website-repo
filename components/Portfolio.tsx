@@ -221,7 +221,7 @@ export default function ModernPortfolio({ categories, onRefresh }: PortfolioProp
             </div>
             <div className="w-16 h-px bg-gray-400 mx-auto mb-6"></div>
             <p className="text-base md:text-lg text-gray-300 max-w-2xl mx-auto leading-relaxed">
-              Explore my collection of photography work across different styles and occasions
+              Explore my collection of photography.
             </p>
           </motion.div>
 
