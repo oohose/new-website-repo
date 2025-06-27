@@ -33,6 +33,7 @@ export default function About() {
   const [mounted, setMounted] = useState(false)
   const [aboutImages, setAboutImages] = useState<ImageData[]>([])
   const [loading, setLoading] = useState(true)
+  const [imagesPreloaded, setImagesPreloaded] = useState(false) // ✅ Track preload status
   
   // Simplified state management
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
@@ -64,6 +65,32 @@ export default function About() {
       setLoading(false)
     }
   }
+
+  // ✅ PRELOAD ALL IMAGES for smooth transitions
+  useEffect(() => {
+    if (aboutImages.length > 1 && !imagesPreloaded) {
+      console.log('🖼️ Starting preload of about images...')
+      
+      const preloadPromises = aboutImages.map((img, index) => {
+        return new Promise((resolve, reject) => {
+          const image = new window.Image()
+          image.onload = () => {
+            console.log(`✅ Preloaded image ${index + 1}/${aboutImages.length}`)
+            resolve(img)
+          }
+          image.onerror = reject
+          // Preload the same size we'll use in display
+          image.src = getClientThumbnailUrl(img.cloudinaryId, 1000, 1200)
+        })
+      })
+
+      Promise.allSettled(preloadPromises).then((results) => {
+        const successful = results.filter(result => result.status === 'fulfilled').length
+        console.log(`✅ About images preload complete: ${successful}/${aboutImages.length} images loaded`)
+        setImagesPreloaded(true)
+      })
+    }
+  }, [aboutImages, imagesPreloaded])
 
   const detectImageDimensions = useCallback((cloudinaryId: string): Promise<ImageDimensions> => {
     return new Promise((resolve) => {
@@ -116,7 +143,7 @@ export default function About() {
   }, [])
 
   const performTransition = useCallback(async () => {
-    if (aboutImages.length <= 1) return
+    if (aboutImages.length <= 1 || !imagesPreloaded) return // ✅ Only transition after preload
 
     const nextIndex = (currentImageIndex + 1) % aboutImages.length
     const nextImage = aboutImages[nextIndex]
@@ -149,15 +176,15 @@ export default function About() {
     await new Promise(resolve => setTimeout(resolve, 500)) // ✅ Reduced from 800ms
     
     setTransitionPhase('idle')
-  }, [aboutImages, currentImageIndex, detectImageDimensions, calculateContainerSize])
+  }, [aboutImages, currentImageIndex, detectImageDimensions, calculateContainerSize, imagesPreloaded])
 
-  // Auto transition - faster timing
+  // Auto transition - faster timing (only after preload)
   useEffect(() => {
-    if (aboutImages.length > 1 && transitionPhase === 'idle') {
+    if (aboutImages.length > 1 && transitionPhase === 'idle' && imagesPreloaded) {
       const timer = setTimeout(performTransition, 5000) // ✅ Reduced from 8000ms to 5000ms
       return () => clearTimeout(timer)
     }
-  }, [aboutImages.length, transitionPhase, performTransition])
+  }, [aboutImages.length, transitionPhase, performTransition, imagesPreloaded])
 
   // Initialize first image dimensions
   useEffect(() => {
@@ -260,6 +287,13 @@ export default function About() {
                         <div className="text-center text-white/60">
                           <div className="text-4xl mb-2 animate-pulse">📸</div>
                           <div className="text-sm">Loading portfolio...</div>
+                        </div>
+                      </div>
+                    ) : !imagesPreloaded ? (
+                      <div className="w-full h-full bg-gray-700 flex items-center justify-center" style={{ borderRadius: '8px' }}>
+                        <div className="text-center text-white/60">
+                          <div className="text-4xl mb-2 animate-pulse">⏳</div>
+                          <div className="text-sm">Preparing images...</div>
                         </div>
                       </div>
                     ) : aboutImages.length > 0 ? (
