@@ -17,7 +17,7 @@ export const siteConfig = {
       cta: "View My Work"
     },
     about: {
-      content: ""
+      content: "I first picked up a camera when I was 16 years old. I was instantly hooked. I see photography as a way to capture feelings and not just moments. My goal is to create images that make you feel something. I want to tell a story with every photo I take, whether it's a portrait, an event, or an automotive shoot. My passion is to create art that resonates with you and captures your unique vision, energy and style.",
     }
   },
 
@@ -87,12 +87,12 @@ export const siteConfig = {
       "photography",
       "photographer",
       "Houston photographer",
-      "wedding photography",
       "portrait photography",
       "professional photography",
       "Texas photographer",
       "event photography",
-      "family photography"
+      "portrait photographer",
+      "automotive photography",
     ]
   },
 

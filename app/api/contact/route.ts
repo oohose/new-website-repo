@@ -1,4 +1,4 @@
-// app/api/contact/route.ts - Using Resend with default domain
+// app/api/contact/route.ts - Using Resend with custom domain
 import { NextRequest, NextResponse } from 'next/server'
 import { Resend } from 'resend'
 
@@ -72,10 +72,10 @@ Reply directly to this email to respond to ${name}.
     try {
       console.log('📧 Sending email via Resend...')
       
-      // Send email to you using Resend's default domain
+      // Send email to you using your custom domain
       const result = await resend.emails.send({
-        from: 'Contact Form <onboarding@resend.dev>', // ✅ Resend's default domain
-        to: [process.env.EMAIL_TO || 'peysphotos6@gmail.com'],
+        from: 'Contact Form <contact@peysphotos.com>', // ✅ Your custom domain
+        to: [process.env.EMAIL_TO || 'peysphotos06@gmail.com'],
         subject: `New Contact: ${name} - ${eventType || 'General Inquiry'}`,
         text: emailContent,
         replyTo: email, // When you reply, it goes to the visitor
@@ -86,7 +86,7 @@ Reply directly to this email to respond to ${name}.
       // Send auto-reply to visitor
       try {
         await resend.emails.send({
-          from: 'Peyton\'s Photography <onboarding@resend.dev>', // ✅ Default domain
+          from: 'Peyton\'s Photography <hello@peysphotos.com>', // ✅ Your custom domain
           to: [email],
           subject: 'Thank you for your inquiry - Peyton\'s Photography',
           text: `Hi ${name},
@@ -102,13 +102,15 @@ Peyton Snipes
 Peyton's Photography
 Phone: (832) 910-6932
 Email: peysphotos6@gmail.com
+Website: peysphotos.com
 Instagram: @pey.s6
 
-This is an automated confirmation. Please don't reply to this email - instead, I'll contact you directly from peysphotos6@gmail.com.`
+This is an automated confirmation. Please don't reply to this email - instead, I'll contact you directly from peysphotos06@gmail.com.`
         })
         console.log('✅ Auto-reply sent')
       } catch (autoReplyError) {
         console.warn('⚠️ Auto-reply failed (but main email sent):', autoReplyError)
+        // Don't fail the whole request if auto-reply fails
       }
 
       return NextResponse.json({ 
@@ -117,8 +119,32 @@ This is an automated confirmation. Please don't reply to this email - instead, I
 
     } catch (emailError: any) {
       console.error('❌ Resend error:', emailError)
+      
+      // If custom domain fails, provide helpful error message
+      if (emailError?.message?.includes('domain is not verified')) {
+        console.log('🔄 Domain not verified yet, falling back to default domain...')
+        
+        // Fallback to default domain if custom domain isn't ready
+        try {
+          const fallbackResult = await resend.emails.send({
+            from: 'Contact Form <onboarding@resend.dev>',
+            to: [process.env.EMAIL_TO || 'peysphotos6@gmail.com'],
+            subject: `New Contact: ${name} - ${eventType || 'General Inquiry'}`,
+            text: emailContent,
+            replyTo: email,
+          })
+          
+          console.log('✅ Fallback email sent:', fallbackResult)
+          return NextResponse.json({ 
+            message: 'Message sent successfully! (Note: Custom domain setup still in progress)' 
+          })
+        } catch (fallbackError) {
+          console.error('❌ Fallback also failed:', fallbackError)
+        }
+      }
+      
       return NextResponse.json(
-        { error: 'Failed to send email. Please try again.' },
+        { error: 'Failed to send email. Please try again or contact directly at peysphotos6@gmail.com.' },
         { status: 500 }
       )
     }

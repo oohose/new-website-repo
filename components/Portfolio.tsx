@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -10,7 +10,7 @@ import { Category } from '@/lib/types'
 import { useAuthCache } from '@/lib/hooks/useAuthCache'
 import EditCategoryModal from '@/components/EditCategoryModal'
 
-// Client-safe thumbnail function (doesn't import server-side Cloudinary)
+// Client-safe thumbnail function
 function getClientThumbnailUrl(cloudinaryId: string, width: number, height: number): string {
   const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME
   if (!cloudName || !cloudinaryId) {
@@ -29,20 +29,111 @@ export default function ModernPortfolio({ categories, onRefresh }: PortfolioProp
   const [categoriesList, setCategoriesList] = useState(categories)
   const [editingCategory, setEditingCategory] = useState<Category | null>(null)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const { data: session } = useSession()
   
-  // Get isAdmin from useAuthCache hook - this is the ONLY isAdmin declaration
   const { isAdmin, forceRefresh } = useAuthCache()
 
+  // ✅ Additional admin check using session data as fallback
+  const isUserAdmin = isAdmin || session?.user?.role === 'ADMIN'
+
+  // Debug logging
+  useEffect(() => {
+    console.log('Portfolio Admin Check:', {
+      isAdmin,
+      sessionRole: session?.user?.role,
+      finalAdminStatus: isUserAdmin,
+      sessionUser: session?.user
+    })
+  }, [isAdmin, session, isUserAdmin])
+
+  // ✅ Update categories whenever the prop changes
   useEffect(() => {
     setMounted(true)
     setCategoriesList(categories)
+    
+    // Debug logging for categories
+    console.log('📊 Portfolio Categories Debug:', {
+      totalCategories: categories.length,
+      privateCategories: categories.filter(cat => cat.isPrivate).length,
+      publicCategories: categories.filter(cat => !cat.isPrivate).length,
+      topLevelCategories: categories.filter(cat => !cat.parentId).length,
+      allCategories: categories.map(cat => ({
+        id: cat.id,
+        name: cat.name,
+        isPrivate: cat.isPrivate,
+        parentId: cat.parentId,
+        imageCount: cat._count?.images || 0
+      }))
+    })
   }, [categories])
 
-  // Update categories when they change (e.g., after cache invalidation)
+  // ✅ Force refresh function that actually updates the data
+  const handleRefresh = useCallback(async () => {
+    if (isRefreshing) return // Prevent multiple simultaneous refreshes
+    
+    setIsRefreshing(true)
+    try {
+      console.log('🔄 Refreshing portfolio data...')
+      
+      // Call the parent's refresh function
+      if (onRefresh) {
+        await onRefresh()
+      }
+      
+      // Force auth cache refresh
+      await forceRefresh()
+      
+      // Also invalidate Next.js cache
+      try {
+        await fetch('/api/revalidate', { method: 'POST' })
+        console.log('✅ Cache invalidated')
+      } catch (error) {
+        console.error('Failed to revalidate cache:', error)
+      }
+      
+      console.log('✅ Portfolio refresh complete')
+      
+    } catch (error) {
+      console.error('❌ Portfolio refresh failed:', error)
+    } finally {
+      setIsRefreshing(false)
+    }
+  }, [onRefresh, forceRefresh, isRefreshing])
+
+  // ✅ Listen for custom events from upload component
   useEffect(() => {
-    setCategoriesList(categories)
-  }, [categories])
+    const handleUploadSuccess = () => {
+      console.log('📸 Upload success detected, refreshing portfolio...')
+      handleRefresh()
+    }
+
+    // Listen for upload success events
+    window.addEventListener('uploadSuccess', handleUploadSuccess)
+    
+    return () => {
+      window.removeEventListener('uploadSuccess', handleUploadSuccess)
+    }
+  }, [handleRefresh])
+
+  // ✅ MOVED: Debug filtering effect moved here with other hooks
+  const topLevelCategories = categoriesList
+    .filter(cat => !cat.parentId && (isUserAdmin || !cat.isPrivate))
+
+  useEffect(() => {
+    console.log('🔍 Portfolio Filtering Debug:', {
+      isUserAdmin,
+      totalTopLevel: categoriesList.filter(cat => !cat.parentId).length,
+      filteredTopLevel: topLevelCategories.length,
+      privateTopLevel: categoriesList.filter(cat => !cat.parentId && cat.isPrivate).length,
+      publicTopLevel: categoriesList.filter(cat => !cat.parentId && !cat.isPrivate).length,
+      topLevelCategories: topLevelCategories.map(cat => ({
+        name: cat.name,
+        isPrivate: cat.isPrivate,
+        shouldShow: isUserAdmin || !cat.isPrivate
+      }))
+    })
+  }, [categoriesList, topLevelCategories, isUserAdmin])
 
   const handleEditCategory = (category: Category) => {
     setEditingCategory(category)
@@ -50,14 +141,7 @@ export default function ModernPortfolio({ categories, onRefresh }: PortfolioProp
   }
 
   const handleEditSuccess = async () => {
-    // Refresh the categories data and invalidate cache
-    if (onRefresh) {
-      await onRefresh()
-    }
-    
-    // Force cache refresh
-    await forceRefresh()
-    
+    await handleRefresh()
     setIsEditModalOpen(false)
     setEditingCategory(null)
   }
@@ -71,18 +155,11 @@ export default function ModernPortfolio({ categories, onRefresh }: PortfolioProp
     return <div className="h-96 bg-gray-800 animate-pulse" />
   }
 
-  // Filter to show private categories to admins
-  const topLevelCategories = categoriesList
-    .filter(cat => !cat.parentId && (isAdmin || !cat.isPrivate))
-
   // Calculate total images for each category (including subcategories)
   const categoriesWithTotals = topLevelCategories.map(category => {
-    // For subcategories, only count images from non-private subcategories (unless admin)
     const subcategoryImages = category.subcategories?.reduce(
       (total, sub) => {
-        // If admin, count all subcategory images regardless of privacy
-        // If not admin, only count images from public subcategories
-        if (isAdmin || !sub.isPrivate) {
+        if (isUserAdmin || !sub.isPrivate) {
           return total + (sub._count?.images || 0)
         }
         return total
@@ -92,7 +169,7 @@ export default function ModernPortfolio({ categories, onRefresh }: PortfolioProp
     
     const totalImages = (category._count?.images || 0) + subcategoryImages
 
-    // ✅ FIX: Only get most recent image from the PARENT category itself, NOT subcategories
+    // Get most recent image from the PARENT category itself
     const categoryImages = category.images || []
     const recentImage = categoryImages
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0]
@@ -121,14 +198,25 @@ export default function ModernPortfolio({ categories, onRefresh }: PortfolioProp
                 Portfolio
               </h2>
               {/* Admin Quick Access */}
-              {isAdmin && (
-                <Link
-                  href="/admin"
-                  className="flex items-center space-x-2 px-3 py-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 rounded-lg transition-colors text-sm"
-                >
-                  <Settings className="w-4 h-4" />
-                  <span>Manage</span>
-                </Link>
+              {isUserAdmin && (
+                <div className="flex items-center space-x-2">
+                  <Link
+                    href="/admin"
+                    className="flex items-center space-x-2 px-3 py-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 rounded-lg transition-colors text-sm"
+                  >
+                    <Settings className="w-4 h-4" />
+                    <span>Manage</span>
+                  </Link>
+                  {/* Manual Refresh Button for Admin */}
+                  <button
+                    onClick={handleRefresh}
+                    disabled={isRefreshing}
+                    className="flex items-center space-x-2 px-3 py-2 bg-green-600/20 hover:bg-green-600/30 text-green-400 rounded-lg transition-colors text-sm disabled:opacity-50"
+                  >
+                    <span className={isRefreshing ? 'animate-spin' : ''}>🔄</span>
+                    <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
+                  </button>
+                </div>
               )}
             </div>
             <div className="w-16 h-px bg-gray-400 mx-auto mb-6"></div>
@@ -142,10 +230,10 @@ export default function ModernPortfolio({ categories, onRefresh }: PortfolioProp
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
               {categoriesWithTotals.map((category, index) => (
                 <ModernPortfolioCard
-                  key={category.id}
+                  key={`${category.id}-${category.totalImages}`} // ✅ Force re-render when image count changes
                   category={category}
                   index={index}
-                  isAdmin={isAdmin}
+                  isAdmin={isUserAdmin}
                   onEdit={() => handleEditCategory(category)}
                 />
               ))}
@@ -160,13 +248,12 @@ export default function ModernPortfolio({ categories, onRefresh }: PortfolioProp
             >
               <h3 className="text-xl text-gray-300 mb-3 font-light">No Galleries Available</h3>
               <p className="text-gray-400 mb-6">
-                {isAdmin 
+                {isUserAdmin 
                   ? "Create your first category to get started!" 
                   : "Check back soon for new photo galleries!"
                 }
               </p>
-              {/* Admin Quick Action */}
-              {isAdmin && (
+              {isUserAdmin && (
                 <Link
                   href="/admin"
                   className="inline-flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
@@ -205,8 +292,11 @@ interface ModernPortfolioCardProps {
 function ModernPortfolioCard({ category, index, isAdmin, onEdit }: ModernPortfolioCardProps) {
   const [imageError, setImageError] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
+  const [currentImageIndex, setCurrentImageIndex] = useState(0)
+  const [hasShuffled, setHasShuffled] = useState(false) // ✅ Track if we've shuffled already
+  const [imagesPreloaded, setImagesPreloaded] = useState(false) // ✅ Track preload status
 
-  // Generate gradient colors based on category name (fallback for no image)
+  // Generate gradient colors based on category name
   const generateGradient = (name: string) => {
     const gradients = [
       'from-rose-400 to-pink-600',
@@ -222,6 +312,64 @@ function ModernPortfolioCard({ category, index, isAdmin, onEdit }: ModernPortfol
     ]
     const hash = name.split('').reduce((a, b) => a + b.charCodeAt(0), 0)
     return gradients[hash % gradients.length]
+  }
+
+  // Get all available images for shuffling (from category and subcategories)
+  const getAllImages = () => {
+    const categoryImages = category.images || []
+    const subcategoryImages = category.subcategories?.flatMap((sub: any) => 
+      (isAdmin || !sub.isPrivate) ? sub.images || [] : []
+    ) || []
+    
+    return [...categoryImages, ...subcategoryImages].filter((img: any) => img.cloudinaryId)
+  }
+
+  const allImages = getAllImages()
+  const currentImage = allImages[currentImageIndex] || category.recentImage
+
+  // ✅ PRELOAD ALL IMAGES for smooth transitions
+  useEffect(() => {
+    if (allImages.length > 1 && !imagesPreloaded) {
+      const preloadPromises = allImages.map((img: any) => {
+        return new Promise((resolve, reject) => {
+          const image = new window.Image()
+          image.onload = resolve
+          image.onerror = reject
+          image.src = getClientThumbnailUrl(img.cloudinaryId, 600, 480)
+        })
+      })
+
+      Promise.allSettled(preloadPromises).then(() => {
+        setImagesPreloaded(true)
+        console.log(`✅ Preloaded ${allImages.length} images for category: ${category.name}`)
+      })
+    }
+  }, [allImages, category.name, imagesPreloaded])
+
+  // ✅ FIXED: Single shuffle on hover that persists (only after preload)
+  const handleMouseEnter = () => {
+    setIsHovered(true)
+    
+    // Only shuffle if we haven't shuffled yet AND there are multiple images AND images are preloaded
+    if (!hasShuffled && allImages.length > 1 && imagesPreloaded) {
+      setHasShuffled(true)
+      
+      // Pick a random image that's different from current
+      const availableIndices = allImages.map((_, index) => index).filter(index => index !== currentImageIndex)
+      if (availableIndices.length > 0) {
+        const randomIndex = availableIndices[Math.floor(Math.random() * availableIndices.length)]
+        setCurrentImageIndex(randomIndex)
+      }
+    }
+  }
+
+  const handleMouseLeave = () => {
+    setIsHovered(false)
+    // ✅ Don't reset the image index - keep the shuffled image
+    // Reset shuffle state after a delay to allow re-shuffle on next hover
+    setTimeout(() => {
+      setHasShuffled(false)
+    }, 1000) // 1 second cooldown before allowing another shuffle
   }
 
   const gradientClass = generateGradient(category.name)
@@ -241,8 +389,8 @@ function ModernPortfolioCard({ category, index, isAdmin, onEdit }: ModernPortfol
       transition={{ duration: 0.6, delay: index * 0.1 }}
       viewport={{ once: true }}
       className="group relative"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
     >
       {/* Admin Edit Button */}
       {isAdmin && (
@@ -256,25 +404,50 @@ function ModernPortfolioCard({ category, index, isAdmin, onEdit }: ModernPortfol
       )}
 
       <Link href={`/gallery/${category.key}`} className="block">
-        {/* Image Container - Dark Overlay Style */}
         <div className="relative aspect-[5/4] overflow-hidden bg-gray-700 mb-4 rounded-xl shadow-lg">
-          {/* Background Image (Always Present) */}
-          {category.recentImage && category.recentImage.cloudinaryId && !imageError ? (
-            <Image
-              src={getClientThumbnailUrl(category.recentImage.cloudinaryId, 600, 480)}
-              alt={category.name}
-              fill
-              className="object-cover transition-all duration-700 group-hover:scale-105"
-              onError={() => setImageError(true)}
-              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-              priority={index < 3}
-            />
-          ) : (
-            // Fallback gradient if no image
-            <div className={`w-full h-full bg-gradient-to-br ${gradientClass}`} />
+          {/* Background Image with Shuffle Effect */}
+          <AnimatePresence mode="wait">
+            {currentImage && currentImage.cloudinaryId && !imageError ? (
+              <motion.div
+                key={`${currentImage.id}-${currentImageIndex}`}
+                initial={{ opacity: 0, scale: 1.05 }} // ✅ Reduced scale for smoother transition
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.98 }}   // ✅ Smaller exit scale for smoother transition
+                transition={{ 
+                  duration: 0.4, // ✅ Faster transition for less jumpiness
+                  ease: "easeOut" // ✅ Better easing
+                }}
+                className="absolute inset-0"
+              >
+                <Image
+                  src={getClientThumbnailUrl(currentImage.cloudinaryId, 600, 480)}
+                  alt={category.name}
+                  fill
+                  className="object-cover transition-all duration-700 group-hover:scale-105"
+                  onError={() => setImageError(true)}
+                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                  priority={index < 3}
+                />
+              </motion.div>
+            ) : (
+              <div className={`w-full h-full bg-gradient-to-br ${gradientClass}`} />
+            )}
+          </AnimatePresence>
+          
+          {/* Image Index Indicator (shows when hovering and multiple images available) */}
+          {isHovered && allImages.length > 1 && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="absolute top-3 right-3 bg-black/60 backdrop-blur-sm text-white text-xs px-2 py-1 rounded-full"
+            >
+              {currentImageIndex + 1} / {allImages.length}
+              {!imagesPreloaded && <span className="ml-1 animate-pulse">●</span>}
+            </motion.div>
           )}
           
-          {/* Dark Overlay (70% opacity by default, disappears on hover) */}
+          {/* Dark Overlay */}
           <div className={`absolute inset-0 bg-black transition-opacity duration-500 ${
             isHovered ? 'opacity-0' : 'opacity-70'
           }`} />
@@ -286,7 +459,7 @@ function ModernPortfolioCard({ category, index, isAdmin, onEdit }: ModernPortfol
             </div>
           )}
 
-          {/* Category Name (Always Visible) */}
+          {/* Category Name */}
           <div className="absolute inset-0 flex flex-col justify-center items-center text-center p-6">
             <h3 className="text-2xl md:text-3xl font-light text-white drop-shadow-lg leading-tight mb-2">
               {category.name}
@@ -306,7 +479,7 @@ function ModernPortfolioCard({ category, index, isAdmin, onEdit }: ModernPortfol
             </motion.div>
           </div>
 
-          {/* Bottom Info (Hidden on Hover) */}
+          {/* Bottom Info */}
           <motion.div
             animate={{ 
               opacity: isHovered ? 0 : 1,
@@ -320,13 +493,16 @@ function ModernPortfolioCard({ category, index, isAdmin, onEdit }: ModernPortfol
                 {category.totalImages} {category.totalImages === 1 ? 'image' : 'images'}
               </span>
               <span className="text-sm">
-                Tap to view →
+                {allImages.length > 1 ? 
+                  (imagesPreloaded ? 'Hover to preview →' : 'Loading preview...') : 
+                  'Tap to view →'
+                }
               </span>
             </div>
           </motion.div>
         </div>
 
-        {/* Content Below Image - Minimal */}
+        {/* Content Below Image */}
         <div className="space-y-1">          
           {category.description && (
             <p className="text-gray-400 text-xs leading-relaxed line-clamp-1 text-center">

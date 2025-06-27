@@ -121,21 +121,21 @@ export default function About() {
     const nextIndex = (currentImageIndex + 1) % aboutImages.length
     const nextImage = aboutImages[nextIndex]
     
-    // Phase 1: Fade out
+    // Phase 1: Fade out - faster
     setTransitionPhase('fadeOut')
     setShowImage(false)
     
-    // Wait for fade out
-    await new Promise(resolve => setTimeout(resolve, 800))
+    // Wait for fade out - reduced timing
+    await new Promise(resolve => setTimeout(resolve, 500)) // ✅ Reduced from 800ms
     
-    // Phase 2: Detect new image dimensions and resize container
+    // Phase 2: Detect new image dimensions and resize container - faster
     setTransitionPhase('resize')
     const newDimensions = await detectImageDimensions(nextImage.cloudinaryId)
     const newContainerSize = calculateContainerSize(newDimensions)
     setContainerDimensions(newContainerSize)
     
-    // Wait for container resize
-    await new Promise(resolve => setTimeout(resolve, 2000))
+    // Wait for container resize - much faster
+    await new Promise(resolve => setTimeout(resolve, 800)) // ✅ Reduced from 2000ms to 800ms
     
     // Phase 3: Change image and fade in
     setTransitionPhase('fadeIn')
@@ -145,16 +145,16 @@ export default function About() {
     await new Promise(resolve => setTimeout(resolve, 100))
     setShowImage(true)
     
-    // Wait for fade in to complete
-    await new Promise(resolve => setTimeout(resolve, 800))
+    // Wait for fade in to complete - faster
+    await new Promise(resolve => setTimeout(resolve, 500)) // ✅ Reduced from 800ms
     
     setTransitionPhase('idle')
   }, [aboutImages, currentImageIndex, detectImageDimensions, calculateContainerSize])
 
-  // Auto transition
+  // Auto transition - faster timing
   useEffect(() => {
     if (aboutImages.length > 1 && transitionPhase === 'idle') {
-      const timer = setTimeout(performTransition, 8000)
+      const timer = setTimeout(performTransition, 5000) // ✅ Reduced from 8000ms to 5000ms
       return () => clearTimeout(timer)
     }
   }, [aboutImages.length, transitionPhase, performTransition])
@@ -216,7 +216,7 @@ export default function About() {
                 viewport={{ once: true }}
               >
                 Based in {siteConfig.photographer.location}, I'm open to working with clients 
-                statewide to create something beautiful together.
+                statewide to capture your visions, or work with you to create your own unique vision. 
               </motion.p>
             </div>
           </motion.div>
@@ -244,7 +244,7 @@ export default function About() {
                     height: containerDimensions.height
                   }}
                   transition={{ 
-                    duration: transitionPhase === 'resize' ? 2 : 0,
+                    duration: transitionPhase === 'resize' ? 0.8 : 0, // ✅ Reduced from 2 seconds to 0.8 seconds
                     ease: "easeInOut"
                   }}
                 >
@@ -267,7 +267,7 @@ export default function About() {
                         className="absolute inset-0"
                         style={{ borderRadius: '8px' }}
                         animate={{ opacity: showImage ? 1 : 0 }}
-                        transition={{ duration: 0.8, ease: "easeInOut" }}
+                        transition={{ duration: 0.5, ease: "easeInOut" }} // ✅ Faster fade transitions
                       >
                         {/* Image with proper clipping mask */}
                         <div 
@@ -318,13 +318,6 @@ export default function About() {
               {/* Decorative elements */}
               <div className="absolute -top-4 -right-4 w-24 h-24 bg-primary-500/20 rounded-full blur-xl" />
               <div className="absolute -bottom-4 -left-4 w-32 h-32 bg-secondary-500/20 rounded-full blur-xl" />
-              
-              {/* Debug info - only show in development */}
-              {process.env.NODE_ENV === 'development' && (
-                <div className="absolute -bottom-12 left-0 right-0 text-center text-xs text-white/40">
-                  Phase: {transitionPhase} | Size: {containerDimensions.width}x{containerDimensions.height} | Total: {aboutImages.length} images
-                </div>
-              )}
             </div>
           </motion.div>
         </div>

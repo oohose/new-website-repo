@@ -1,54 +1,34 @@
-// app/api/categories/route.ts - Complete implementation
+// app/api/categories/route.ts - Updated to automatically handle admin status
 import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 
-// ✅ GET method - Fetch categories
+// ✅ GET method - Fetch categories with automatic admin detection
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
-    const includePrivate = searchParams.get('includePrivate') === 'true'
-
+    // Get session to determine admin status
     const session = await getServerSession(authOptions)
     const isAdmin = (session?.user as any)?.role === 'ADMIN'
 
     console.log('🔍 Categories API Debug:')
-    console.log('- Include private:', includePrivate)
+    console.log('- Session exists:', !!session)
+    console.log('- User email:', session?.user?.email)
+    console.log('- User role:', (session?.user as any)?.role)
     console.log('- Is admin:', isAdmin)
-    console.log('- Session user:', session?.user)
 
-    // Build where clause
-    let whereClause: any = {}
-    if (!includePrivate && !isAdmin) {
-      whereClause.isPrivate = false
-    }
-
-    console.log('- Where clause:', whereClause)
-
-    // First, let's see what's in the database
-    const allCategories = await db.category.findMany({
-      select: {
-        id: true,
-        name: true,
-        key: true,
-        parentId: true,
-        isPrivate: true,
-        createdAt: true
-      }
-    })
-
-    console.log('- All categories in DB:', allCategories)
-
-    // Get categories with full data
+    // Get all categories if admin, only public if not
     const categories = await db.category.findMany({
-      where: whereClause,
+      where: {
+        parentId: null, // Only top-level categories
+        ...(isAdmin ? {} : { isPrivate: false }) // Include private only for admins
+      },
       include: {
         images: {
           orderBy: { createdAt: 'desc' }
         },
         subcategories: {
-          where: !includePrivate && !isAdmin ? { isPrivate: false } : {},
+          where: isAdmin ? {} : { isPrivate: false }, // Include private subcategories only for admins
           include: {
             images: {
               orderBy: { createdAt: 'desc' }
@@ -63,43 +43,26 @@ export async function GET(request: NextRequest) {
         }
       },
       orderBy: {
-        createdAt: 'desc'
+        createdAt: 'asc'
       }
     })
 
-    console.log('- Filtered categories:', categories.length)
-    console.log('- Categories data:', categories.map(c => ({ 
-      id: c.id, 
-      name: c.name, 
-      parentId: c.parentId,
-      imageCount: c._count.images
-    })))
+    console.log('- Total categories returned:', categories.length)
+    console.log('- Private categories in result:', categories.filter(c => c.isPrivate).length)
 
-    return new Response(JSON.stringify({ 
-      success: true, 
-      categories,
-      debug: {
-        totalInDB: allCategories.length,
-        filtered: categories.length,
-        isAdmin,
-        includePrivate,
-        timestamp: new Date().toISOString()
-      }
-    }), { 
+    return new Response(JSON.stringify(categories), { 
       status: 200,
       headers: { 
         'Content-Type': 'application/json',
-        'Cache-Control': 'no-cache' // Prevent caching during debugging
+        'Cache-Control': 'no-cache, no-store, must-revalidate' // Force fresh data
       }
     })
 
   } catch (error) {
     console.error('❌ Categories GET Error:', error)
     return new Response(JSON.stringify({ 
-      success: false, 
       error: 'Failed to fetch categories',
-      details: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined
+      details: error instanceof Error ? error.message : 'Unknown error'
     }), { 
       status: 500,
       headers: { 'Content-Type': 'application/json' }
@@ -107,7 +70,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// ✅ POST method - Create category (your existing code)
+// ✅ POST method - Create category (keeping your existing logic)
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -134,9 +97,7 @@ export async function POST(req: NextRequest) {
     const newCategory = await db.category.create({ 
       data: {
         ...body,
-        // Ensure parentId is null if empty string
         parentId: body.parentId || null,
-        // Ensure description is null if empty string
         description: body.description || null
       },
       include: {
@@ -162,7 +123,6 @@ export async function POST(req: NextRequest) {
     let errorMessage = 'Failed to create category'
     if (error instanceof Error) {
       errorMessage = error.message
-      console.error('Error details:', error.stack)
     }
 
     return new Response(JSON.stringify({ 
@@ -175,7 +135,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// ✅ OPTIONS method - Handle CORS preflight requests
+// ✅ OPTIONS method - Handle CORS
 export async function OPTIONS() {
   return new Response(null, {
     status: 200,

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Image from 'next/image'
 import Link from 'next/link'
-import { ArrowLeft, X, ChevronLeft, ChevronRight, Edit, ExternalLink } from 'lucide-react'
+import { ArrowLeft, X, ChevronLeft, ChevronRight, Edit, ExternalLink, Lock } from 'lucide-react'
 import EditCategoryModal from '@/components/EditCategoryModal'
 import { Category, Image as ImageType } from '@/lib/types'
 
@@ -151,6 +151,9 @@ export default function DarkElegantGalleryView({ category, isAdmin, onRefresh }:
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [editingCategory, setEditingCategory] = useState<Category | null>(null)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+
+  // Check if this is a private gallery being accessed by non-admin
+  const isPrivateDirectAccess = category.isPrivate && !isAdmin
 
   // FIXED: Simple Cloudinary URL function that doesn't crop
   const getOptimizedUrl = (image: ImageType, width?: number, forLightbox = false) => {
@@ -317,12 +320,12 @@ export default function DarkElegantGalleryView({ category, isAdmin, onRefresh }:
 
           {/* Content */}
           <div className="relative z-10 text-center max-w-4xl mx-auto pt-40 sm:pt-52">
-            {/* Navigation Buttons - Stacked vertically on the left */}
-            <div className="absolute top-0 left-0 -mt-20 flex flex-col space-y-4">
-              {/* Back Button - Top */}
+            {/* Navigation Buttons - Centered above content */}
+            <div className="flex flex-col items-center space-y-4 mb-12">
+              {/* Back Button */}
               <motion.div
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6 }}
               >
                 <Link
@@ -336,11 +339,11 @@ export default function DarkElegantGalleryView({ category, isAdmin, onRefresh }:
                 </Link>
               </motion.div>
 
-              {/* Edit Button - Bottom (Admin Only) */}
+              {/* Edit Button (Admin Only) */}
               {isAdmin && (
                 <motion.div
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
+                  initial={{ opacity: 0, y: -20 }}
+                  animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.6, delay: 0.1 }}
                 >
                   <button
@@ -357,7 +360,7 @@ export default function DarkElegantGalleryView({ category, isAdmin, onRefresh }:
             </div>
 
             {/* Main Content */}
-            <HeaderContent category={category} isAdmin={isAdmin} />
+            <HeaderContent category={category} isAdmin={isAdmin} isPrivateDirectAccess={isPrivateDirectAccess} />
           </div>
 
           {/* Scroll Indicator */}
@@ -656,7 +659,11 @@ export default function DarkElegantGalleryView({ category, isAdmin, onRefresh }:
 }
 
 // Separate component for header content with social media integration
-function HeaderContent({ category, isAdmin }: { category: Category, isAdmin: boolean }) {
+function HeaderContent({ category, isAdmin, isPrivateDirectAccess }: { 
+  category: Category, 
+  isAdmin: boolean,
+  isPrivateDirectAccess: boolean 
+}) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 30 }}
@@ -702,21 +709,41 @@ function HeaderContent({ category, isAdmin }: { category: Category, isAdmin: boo
         </motion.div>
       )}
 
-      {/* Stats */}
+      {/* Stats with Private Gallery Indicator */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.8, delay: 0.7 }}
-        className="flex items-center justify-center space-x-8 text-white/60"
+        className="flex flex-col items-center justify-center space-y-4"
       >
-        <span className="font-light tracking-wide">
+        {/* Image Count */}
+        <span className="text-white/60 font-light tracking-wide">
           {category._count.images} {category._count.images === 1 ? 'image' : 'images'} in this collection
         </span>
-        {isAdmin && category.isPrivate && (
-          <span className="px-4 py-2 bg-red-500/20 text-red-300 rounded-full text-sm border border-red-500/30">
-            Private Gallery
-          </span>
-        )}
+        
+        {/* Privacy Indicators */}
+        <div className="flex items-center justify-center space-x-4">
+          {/* Admin Private Gallery Badge */}
+          {isAdmin && category.isPrivate && (
+            <span className="px-4 py-2 bg-red-500/20 text-red-300 rounded-full text-sm border border-red-500/30 flex items-center space-x-2">
+              <Lock className="w-4 h-4" />
+              <span>Private Gallery</span>
+            </span>
+          )}
+          
+          {/* Subtle Private Access Indicator for Non-Admin */}
+          {isPrivateDirectAccess && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.5, delay: 0.8 }}
+              className="px-4 py-2 bg-amber-900/30 text-amber-200/80 rounded-full text-sm border border-amber-700/40 flex items-center space-x-2 backdrop-blur-sm"
+            >
+              <Lock className="w-3 h-3" />
+              <span>Private Collection</span>
+            </motion.div>
+          )}
+        </div>
       </motion.div>
     </motion.div>
   )

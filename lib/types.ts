@@ -29,13 +29,14 @@ export interface Category {
 
 export interface UploadFile {
   id: string
-  file: File
+  file: File // The file to upload (potentially compressed)
+  originalFile: File // The original file for display purposes
   preview: string
   status: 'pending' | 'uploading' | 'success' | 'error'
   progress: number
-  error?: string
   title: string
   compressedFile?: File
+  error?: string
 }
 
 export interface User {

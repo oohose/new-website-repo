@@ -80,15 +80,10 @@ export default function Contact() {
 
   const eventTypes = [
     { value: '', label: 'Select an event type' },
-    { value: 'wedding', label: 'Wedding' },
-    { value: 'engagement', label: 'Engagement' },
+    { value: 'model', label: 'Model' },
     { value: 'portrait', label: 'Portrait Session' },
-    { value: 'family', label: 'Family Photos' },
-    { value: 'senior', label: 'Senior Photos' },
-    { value: 'maternity', label: 'Maternity' },
-    { value: 'newborn', label: 'Newborn' },
-    { value: 'event', label: 'Event Photography' },
-    { value: 'commercial', label: 'Commercial' },
+    { value: 'automotive', label: 'Automotive Photography' },
+    { value: 'shoot', label: 'Shoot Together'},
     { value: 'other', label: 'Other' }
   ]
 
@@ -104,10 +99,10 @@ export default function Contact() {
           className="text-center mb-16 lg:mb-24"
         >
           <h2 className="text-3xl md:text-4xl lg:text-5xl font-light text-white mb-6 gradient-text">
-            Let's Create Something Beautiful
+            Let's get in touch!
           </h2>
           <p className="text-lg text-white/70 max-w-2xl mx-auto">
-            Ready to capture your special moments? I'd love to hear about your vision and bring it to life.
+            I'm always excited to hear from you! Whether you have a question, want to book a session, or just want to say hi, feel free to reach out. I typically respond within 24-48 hours.
           </p>
         </motion.div>
 

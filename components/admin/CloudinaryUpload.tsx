@@ -28,65 +28,145 @@ interface UploadComponentProps {
   onUploadComplete: () => void
 }
 
-// Image compression function
+// Fixed image compression function for photography portfolio
 const compressImage = (file: File, targetSizeMB: number = 4.5): Promise<File> => {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    // Early return if file is already small enough
+    if (file.size <= targetSizeMB * 1024 * 1024) {
+      console.log('✅ File already small enough, no compression needed')
+      resolve(file)
+      return
+    }
+
+    console.log(`🔄 Compressing ${file.name} from ${(file.size / 1024 / 1024).toFixed(2)}MB to target ${targetSizeMB}MB`)
+
     const canvas = document.createElement('canvas')
     const ctx = canvas.getContext('2d')
     const img = new window.Image()
     
+    const cleanup = () => {
+      URL.revokeObjectURL(img.src)
+    }
+
     img.onload = () => {
-      // More generous dimensions for photography - maintain higher resolution
-      const maxWidth = 2800  // Increased from 2000
-      const maxHeight = 2800 // Increased from 2000
-      let { width, height } = img
-      
-      // Only resize if significantly larger than max dimensions
-      if (width > height) {
-        if (width > maxWidth) {
-          height = (height * maxWidth) / width
-          width = maxWidth
+      try {
+        // More generous dimensions for photography - maintain higher resolution
+        const maxWidth = 2800  // Increased from 2000
+        const maxHeight = 2800 // Increased from 2000
+        let { width, height } = img
+        
+        // Only resize if significantly larger than max dimensions
+        if (width > height) {
+          if (width > maxWidth) {
+            height = (height * maxWidth) / width
+            width = maxWidth
+          }
+        } else {
+          if (height > maxHeight) {
+            width = (width * maxHeight) / height
+            height = maxHeight
+          }
         }
-      } else {
-        if (height > maxHeight) {
-          width = (width * maxHeight) / height
-          height = maxHeight
+        
+        canvas.width = width
+        canvas.height = height
+        
+        if (ctx) {
+          ctx.imageSmoothingEnabled = true
+          ctx.imageSmoothingQuality = 'high'
+          ctx.drawImage(img, 0, 0, width, height)
+        } else {
+          cleanup()
+          reject(new Error('Could not get canvas context'))
+          return
         }
-      }
-      
-      canvas.width = width
-      canvas.height = height
-      ctx?.drawImage(img, 0, 0, width, height)
-      
-      const targetSizeBytes = targetSizeMB * 1024 * 1024
-      
-      const tryCompress = (quality: number) => {
-        canvas.toBlob((blob) => {
-          if (blob) {
+        
+        const targetSizeBytes = targetSizeMB * 1024 * 1024
+        let bestResult = file // Keep track of best result so far
+        let attempts = 0
+        const maxAttempts = 15
+        
+        const tryCompress = (quality: number) => {
+          attempts++
+          
+          if (attempts > maxAttempts) {
+            console.log(`⚠️ Max attempts reached. Using best result: ${(bestResult.size / 1024 / 1024).toFixed(2)}MB`)
+            cleanup()
+            resolve(bestResult)
+            return
+          }
+
+          canvas.toBlob((blob) => {
+            if (!blob) {
+              cleanup()
+              reject(new Error('Failed to create compressed blob'))
+              return
+            }
+
             const compressedFile = new File([blob], file.name, {
               type: 'image/jpeg',
               lastModified: Date.now()
             })
             
-            // If still too large and quality can be reduced further, try again
-            if (compressedFile.size > targetSizeBytes && quality > 0.3) {
-              // Reduce quality in smaller steps for better control
-              tryCompress(quality - 0.05)
-            } else {
-              resolve(compressedFile)
+            const sizeMB = compressedFile.size / 1024 / 1024
+            console.log(`📊 Attempt ${attempts}: ${sizeMB.toFixed(2)}MB at quality ${quality.toFixed(2)}`)
+            
+            // Update best result if this is closer to target (but still under)
+            if (compressedFile.size <= targetSizeBytes) {
+              if (compressedFile.size > bestResult.size || bestResult.size > targetSizeBytes) {
+                bestResult = compressedFile
+              }
             }
-          } else {
-            resolve(file)
-          }
-        }, 'image/jpeg', quality)
+            
+            // If we're very close to target size, use this result
+            const targetTolerance = targetSizeBytes * 0.1 // 10% tolerance
+            if (Math.abs(compressedFile.size - targetSizeBytes) <= targetTolerance) {
+              console.log(`✅ Target achieved: ${(file.size / 1024 / 1024).toFixed(2)}MB → ${sizeMB.toFixed(2)}MB`)
+              cleanup()
+              resolve(compressedFile)
+              return
+            }
+            
+            // If we're under target and quality is still reasonable, try higher quality
+            if (compressedFile.size < targetSizeBytes && quality < 0.95) {
+              const newQuality = Math.min(0.95, quality + 0.05)
+              tryCompress(newQuality)
+            }
+            // If we're over target, try lower quality
+            else if (compressedFile.size > targetSizeBytes && quality > 0.3) {
+              const newQuality = Math.max(0.3, quality - 0.05)
+              tryCompress(newQuality)
+            }
+            // If we can't get closer, use best result
+            else {
+              console.log(`✅ Compression complete: ${(file.size / 1024 / 1024).toFixed(2)}MB → ${(bestResult.size / 1024 / 1024).toFixed(2)}MB`)
+              cleanup()
+              resolve(bestResult)
+            }
+          }, 'image/jpeg', quality)
+        }
+        
+        // Start with a quality that should get us close to target
+        const initialQuality = 0.8
+        tryCompress(initialQuality)
+        
+      } catch (canvasError) {
+        cleanup()
+        reject(canvasError)
       }
-      
-      // Start with higher quality for photography (0.9 instead of 0.8)
-      tryCompress(0.9)
     }
     
-    img.onerror = () => resolve(file)
-    img.src = URL.createObjectURL(file)
+    img.onerror = () => {
+      cleanup()
+      reject(new Error('Failed to load image for compression'))
+    }
+    
+    try {
+      img.src = URL.createObjectURL(file)
+    } catch (urlError) {
+      cleanup()
+      reject(urlError)
+    }
   })
 }
 
@@ -110,35 +190,29 @@ function CategoryPicker({ categories, selectedCategoryId, onCategorySelect }: Ca
   const handleCategoryClick = (categoryId: string, event: React.MouseEvent) => {
     event.preventDefault()
     event.stopPropagation()
-    console.log('Category clicked:', categoryId) // Debug log
+    console.log('Category clicked:', categoryId)
     onCategorySelect(categoryId)
   }
 
-  // ✅ Create a proper hierarchy from flat categories array
   const buildCategoryHierarchy = (categories: Category[]) => {
     const categoryMap = new Map<string, Category & { subcategories: Category[] }>()
     const rootCategories: (Category & { subcategories: Category[] })[] = []
 
-    // First pass: Create map with all categories
     categories.forEach(cat => {
       categoryMap.set(cat.id, { ...cat, subcategories: [] })
     })
 
-    // Second pass: Build hierarchy
     categories.forEach(cat => {
       const categoryWithSubs = categoryMap.get(cat.id)!
       
       if (cat.parentId) {
-        // This is a subcategory
         const parent = categoryMap.get(cat.parentId)
         if (parent) {
           parent.subcategories.push(categoryWithSubs)
         } else {
-          // Parent not found, treat as root level
           rootCategories.push(categoryWithSubs)
         }
       } else {
-        // This is a top-level category
         rootCategories.push(categoryWithSubs)
       }
     })
@@ -160,9 +234,8 @@ function CategoryPicker({ categories, selectedCategoryId, onCategorySelect }: Ca
               : 'hover:bg-gray-700 text-gray-300 hover:text-white'
           }`}
           onClick={(e) => handleCategoryClick(category.id, e)}
-          style={{ minHeight: '48px' }} // Ensure minimum clickable area
+          style={{ minHeight: '48px' }}
         >
-          {/* Expand/Collapse Button */}
           {hasSubcategories && (
             <button
               onClick={(e) => toggleExpanded(category.id, e)}
@@ -177,10 +250,8 @@ function CategoryPicker({ categories, selectedCategoryId, onCategorySelect }: Ca
             </button>
           )}
           
-          {/* Spacing for categories without subcategories */}
           {!hasSubcategories && level > 0 && <div className="w-6 flex-shrink-0" />}
           
-          {/* Folder Icon */}
           <div className="flex-shrink-0">
             {hasSubcategories ? (
               <FolderOpen className="w-5 h-5" />
@@ -189,25 +260,21 @@ function CategoryPicker({ categories, selectedCategoryId, onCategorySelect }: Ca
             )}
           </div>
           
-          {/* Category Name with level indicator */}
           <span className="flex-1 text-sm font-medium truncate">
             {level > 0 && '↳ '}{category.name}
           </span>
           
-          {/* Privacy indicator */}
           {category.isPrivate && (
             <div className="flex-shrink-0">
               <EyeOff className="w-3 h-3 text-red-400" />
             </div>
           )}
           
-          {/* Image Count */}
           <span className="text-xs text-gray-400 flex-shrink-0 min-w-[30px] text-right">
             {category._count?.images || 0}
           </span>
         </div>
         
-        {/* Subcategories */}
         {hasSubcategories && isExpanded && (
           <div className="mt-1 space-y-1">
             {category.subcategories.map(subcategory => 
@@ -219,12 +286,10 @@ function CategoryPicker({ categories, selectedCategoryId, onCategorySelect }: Ca
     )
   }
 
-  // ✅ Build hierarchy from categories
   const hierarchicalCategories = buildCategoryHierarchy(categories)
 
   return (
     <div className="bg-gray-800 border border-gray-700 rounded-lg max-h-64 overflow-y-auto">
-      {/* Header */}
       <div className="sticky top-0 bg-gray-800 border-b border-gray-700 p-4 z-10">
         <h4 className="text-white font-medium">Select Category</h4>
         <div className="text-xs text-gray-400 mt-1 space-y-1">
@@ -235,7 +300,6 @@ function CategoryPicker({ categories, selectedCategoryId, onCategorySelect }: Ca
         </div>
       </div>
       
-      {/* Categories List */}
       <div className="p-2 space-y-1">
         {categories.length > 0 ? (
           hierarchicalCategories.length > 0 ? (
@@ -244,7 +308,6 @@ function CategoryPicker({ categories, selectedCategoryId, onCategorySelect }: Ca
                 .sort((a, b) => a.name.localeCompare(b.name))
                 .map(category => renderCategory(category))}
               
-              {/* ✅ Also show any orphaned subcategories that couldn't find their parent */}
               {categories
                 .filter(cat => cat.parentId && !categories.find(parent => parent.id === cat.parentId))
                 .map(orphanedCat => (
@@ -295,49 +358,68 @@ export default function UploadComponent({ categories, onUploadComplete }: Upload
       }
     })
     setFiles([])
+    
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
   }, [files])
 
   const handleFiles = useCallback(async (newFiles: FileList | File[]) => {
-  const fileArray = Array.from(newFiles)
-  const validFiles = fileArray.filter(file => {
-    if (!file.type.startsWith('image/')) {
-      toast.error(`${file.name} is not an image file`)
-      return false
-    }
-    return true
-  })
-
-  const uploadFilesPromises = validFiles.map(async (file): Promise<UploadFile | null> => {
-    let processedFile = file
-    
-    // Changed from 10MB to 9MB threshold
-    if (file.size > 9 * 1024 * 1024) {
-      toast(`Compressing ${file.name}...`)
-      try {
-        // Compress to target size of 4.5MB (you can adjust this between 4-5MB)
-        processedFile = await compressImage(file, 4.5)
-        toast.success(`${file.name} compressed from ${(file.size / 1024 / 1024).toFixed(1)}MB to ${(processedFile.size / 1024 / 1024).toFixed(1)}MB`)
-      } catch (error) {
-        toast.error(`Failed to compress ${file.name}`)
-        return null
+    const fileArray = Array.from(newFiles)
+    const validFiles = fileArray.filter(file => {
+      if (!file.type.startsWith('image/')) {
+        toast.error(`${file.name} is not an image file`)
+        return false
       }
-    }
+      return true
+    })
 
-    return {
-      id: Math.random().toString(36),
-      file: processedFile,
-      preview: URL.createObjectURL(file),
-      status: 'pending' as const,
-      progress: 0,
-      title: file.name.replace(/\.[^/.]+$/, ''),
-      compressedFile: processedFile !== file ? processedFile : undefined
-    }
-  })
+    const uploadFilesPromises = validFiles.map(async (file): Promise<UploadFile | null> => {
+      let processedFile = file
+      const originalFile = file
+      
+      if (file.size > 9 * 1024 * 1024) {
+        toast(`Compressing ${file.name}...`)
+        try {
+          processedFile = await compressImage(file, 4.5)
+          
+          const originalSizeMB = (file.size / 1024 / 1024).toFixed(1)
+          const compressedSizeMB = (processedFile.size / 1024 / 1024).toFixed(1)
+          
+          toast.success(`${file.name} compressed from ${originalSizeMB}MB to ${compressedSizeMB}MB`)
+          
+          console.log(`Compression result:`, {
+            original: `${originalSizeMB}MB`,
+            compressed: `${compressedSizeMB}MB`,
+            fileName: file.name
+          })
+          
+        } catch (error) {
+          console.error('Compression failed:', error)
+          toast.error(`Failed to compress ${file.name}`)
+          return null
+        }
+      } else {
+        const sizeMB = (file.size / 1024 / 1024).toFixed(1)
+        console.log(`File ${file.name}: ${sizeMB}MB - no compression needed`)
+      }
 
-  const uploadFilesResults = await Promise.all(uploadFilesPromises)
-  const validUploadFiles = uploadFilesResults.filter((file): file is UploadFile => file !== null)
-  setFiles(prev => [...prev, ...validUploadFiles])
-}, [])
+      return {
+        id: Math.random().toString(36),
+        file: processedFile,
+        originalFile: originalFile,
+        preview: URL.createObjectURL(originalFile),
+        status: 'pending' as const,
+        progress: 0,
+        title: file.name.replace(/\.[^/.]+$/, ''),
+        compressedFile: processedFile !== originalFile ? processedFile : undefined
+      }
+    })
+
+    const uploadFilesResults = await Promise.all(uploadFilesPromises)
+    const validUploadFiles = uploadFilesResults.filter((file): file is UploadFile => file !== null)
+    setFiles(prev => [...prev, ...validUploadFiles])
+  }, [])
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -369,6 +451,10 @@ export default function UploadComponent({ categories, onUploadComplete }: Upload
       }
       return prev.filter(f => f.id !== fileId)
     })
+    
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
   }, [])
 
   const updateFileTitle = useCallback((fileId: string, title: string) => {
@@ -407,22 +493,36 @@ export default function UploadComponent({ categories, onUploadComplete }: Upload
           formData.append('title', uploadFile.title)
           formData.append('categoryId', selectedCategoryId)
 
+          console.log(`📤 Uploading ${uploadFile.title} (${(fileToUpload.size / 1024 / 1024).toFixed(2)}MB)`)
+
           const response = await fetch('/api/upload', {
             method: 'POST',
             body: formData,
           })
 
-          if (response.ok) {
+          const contentType = response.headers.get('content-type')
+          let responseData
+          
+          if (contentType && contentType.includes('application/json')) {
+            responseData = await response.json()
+          } else {
+            const textResponse = await response.text()
+            console.error('Non-JSON response:', textResponse.substring(0, 200))
+            throw new Error(`Server error: ${response.status} ${response.statusText}`)
+          }
+
+          if (response.ok && responseData.success) {
             setFiles(prev => prev.map(f => 
               f.id === uploadFile.id 
                 ? { ...f, status: 'success', progress: 100 }
                 : f
             ))
+            console.log('✅ Upload successful:', responseData.data)
           } else {
-            const error = await response.json()
-            throw new Error(error.message || 'Upload failed')
+            throw new Error(responseData.error || 'Upload failed')
           }
         } catch (error: any) {
+          console.error('❌ Upload failed for', uploadFile.title, ':', error)
           setFiles(prev => prev.map(f => 
             f.id === uploadFile.id 
               ? { ...f, status: 'error', error: error.message }
@@ -438,15 +538,23 @@ export default function UploadComponent({ categories, onUploadComplete }: Upload
       
       if (successCount > 0) {
         toast.success(`${successCount} images uploaded successfully`)
+
+        const uploadEvent = new CustomEvent('uploadSuccess', {
+        detail: { successCount, categoryId: selectedCategoryId }
+      })
+      window.dispatchEvent(uploadEvent)
+
         onUploadComplete()
       }
+
+      
       
       if (errorCount > 0) {
         toast.error(`${errorCount} images failed to upload`)
       }
 
       setTimeout(() => {
-        clearAllFiles()
+        setFiles(prev => prev.filter(f => f.status !== 'success'))
       }, 2000)
 
     } catch (error) {
@@ -463,14 +571,12 @@ export default function UploadComponent({ categories, onUploadComplete }: Upload
 
   return (
     <div className="space-y-6">
-      {/* Category Picker */}
       <CategoryPicker
         categories={categories}
         selectedCategoryId={selectedCategoryId}
         onCategorySelect={setSelectedCategoryId}
       />
 
-      {/* Selected Category Display */}
       {selectedCategory && (
         <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
           <div className="flex items-center space-x-2">
@@ -487,7 +593,6 @@ export default function UploadComponent({ categories, onUploadComplete }: Upload
         </div>
       )}
 
-      {/* Drop Zone */}
       <div
         className={`relative border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
           dragActive
@@ -503,7 +608,12 @@ export default function UploadComponent({ categories, onUploadComplete }: Upload
           type="file"
           multiple
           accept="image/*"
-          onChange={(e) => e.target.files && handleFiles(e.target.files)}
+          onChange={(e) => {
+            if (e.target.files) {
+              handleFiles(e.target.files)
+              e.target.value = ''
+            }
+          }}
           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
         />
         
@@ -517,13 +627,12 @@ export default function UploadComponent({ categories, onUploadComplete }: Upload
               Drop images here or click to browse
             </p>
             <p className="text-gray-400 text-sm">
-              Supports JPG, PNG, WebP. Files over 10MB will be automatically compressed.
+              Supports JPG, PNG, WebP. Files over 9MB will be compressed to ~4.5MB.
             </p>
           </div>
         </div>
       </div>
 
-      {/* File List */}
       <AnimatePresence>
         {files.length > 0 && (
           <motion.div
@@ -568,7 +677,6 @@ export default function UploadComponent({ categories, onUploadComplete }: Upload
                   className="bg-gray-800 border border-gray-700 rounded-lg p-4"
                 >
                   <div className="flex space-x-3">
-                    {/* Preview */}
                     <div className="w-16 h-16 relative flex-shrink-0 bg-gray-700 rounded overflow-hidden">
                       <Image
                         src={uploadFile.preview}
@@ -578,7 +686,6 @@ export default function UploadComponent({ categories, onUploadComplete }: Upload
                       />
                     </div>
 
-                    {/* Content */}
                     <div className="flex-1 min-w-0">
                       <input
                         type="text"
@@ -594,7 +701,7 @@ export default function UploadComponent({ categories, onUploadComplete }: Upload
                           {uploadFile.compressedFile ? (
                             <>
                               <span className="line-through text-red-400">
-                                {(uploadFile.file.size / 1024 / 1024).toFixed(1)}MB
+                                {(uploadFile.originalFile.size / 1024 / 1024).toFixed(1)}MB
                               </span>
                               {' → '}
                               <span className="text-green-400">
@@ -602,7 +709,7 @@ export default function UploadComponent({ categories, onUploadComplete }: Upload
                               </span>
                             </>
                           ) : (
-                            `${(uploadFile.file.size / 1024 / 1024).toFixed(1)}MB`
+                            `${(uploadFile.originalFile.size / 1024 / 1024).toFixed(1)}MB`
                           )}
                         </span>
                         
