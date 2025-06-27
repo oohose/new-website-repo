@@ -29,17 +29,19 @@ interface UploadComponentProps {
 }
 
 // Image compression function
-const compressImage = (file: File, maxSizeMB: number = 10): Promise<File> => {
+const compressImage = (file: File, targetSizeMB: number = 4.5): Promise<File> => {
   return new Promise((resolve) => {
     const canvas = document.createElement('canvas')
     const ctx = canvas.getContext('2d')
     const img = new window.Image()
     
     img.onload = () => {
-      const maxWidth = 2000
-      const maxHeight = 2000
+      // More generous dimensions for photography - maintain higher resolution
+      const maxWidth = 2800  // Increased from 2000
+      const maxHeight = 2800 // Increased from 2000
       let { width, height } = img
       
+      // Only resize if significantly larger than max dimensions
       if (width > height) {
         if (width > maxWidth) {
           height = (height * maxWidth) / width
@@ -56,6 +58,8 @@ const compressImage = (file: File, maxSizeMB: number = 10): Promise<File> => {
       canvas.height = height
       ctx?.drawImage(img, 0, 0, width, height)
       
+      const targetSizeBytes = targetSizeMB * 1024 * 1024
+      
       const tryCompress = (quality: number) => {
         canvas.toBlob((blob) => {
           if (blob) {
@@ -64,8 +68,10 @@ const compressImage = (file: File, maxSizeMB: number = 10): Promise<File> => {
               lastModified: Date.now()
             })
             
-            if (compressedFile.size > maxSizeMB * 1024 * 1024 && quality > 0.1) {
-              tryCompress(quality - 0.1)
+            // If still too large and quality can be reduced further, try again
+            if (compressedFile.size > targetSizeBytes && quality > 0.3) {
+              // Reduce quality in smaller steps for better control
+              tryCompress(quality - 0.05)
             } else {
               resolve(compressedFile)
             }
@@ -75,7 +81,8 @@ const compressImage = (file: File, maxSizeMB: number = 10): Promise<File> => {
         }, 'image/jpeg', quality)
       }
       
-      tryCompress(0.8)
+      // Start with higher quality for photography (0.9 instead of 0.8)
+      tryCompress(0.9)
     }
     
     img.onerror = () => resolve(file)
@@ -291,44 +298,46 @@ export default function UploadComponent({ categories, onUploadComplete }: Upload
   }, [files])
 
   const handleFiles = useCallback(async (newFiles: FileList | File[]) => {
-    const fileArray = Array.from(newFiles)
-    const validFiles = fileArray.filter(file => {
-      if (!file.type.startsWith('image/')) {
-        toast.error(`${file.name} is not an image file`)
-        return false
-      }
-      return true
-    })
+  const fileArray = Array.from(newFiles)
+  const validFiles = fileArray.filter(file => {
+    if (!file.type.startsWith('image/')) {
+      toast.error(`${file.name} is not an image file`)
+      return false
+    }
+    return true
+  })
 
-    const uploadFilesPromises = validFiles.map(async (file): Promise<UploadFile | null> => {
-      let processedFile = file
-      
-      if (file.size > 10 * 1024 * 1024) {
-        toast(`Compressing ${file.name}...`)
-        try {
-          processedFile = await compressImage(file, 9)
-          toast.success(`${file.name} compressed from ${(file.size / 1024 / 1024).toFixed(1)}MB to ${(processedFile.size / 1024 / 1024).toFixed(1)}MB`)
-        } catch (error) {
-          toast.error(`Failed to compress ${file.name}`)
-          return null
-        }
+  const uploadFilesPromises = validFiles.map(async (file): Promise<UploadFile | null> => {
+    let processedFile = file
+    
+    // Changed from 10MB to 9MB threshold
+    if (file.size > 9 * 1024 * 1024) {
+      toast(`Compressing ${file.name}...`)
+      try {
+        // Compress to target size of 4.5MB (you can adjust this between 4-5MB)
+        processedFile = await compressImage(file, 4.5)
+        toast.success(`${file.name} compressed from ${(file.size / 1024 / 1024).toFixed(1)}MB to ${(processedFile.size / 1024 / 1024).toFixed(1)}MB`)
+      } catch (error) {
+        toast.error(`Failed to compress ${file.name}`)
+        return null
       }
+    }
 
-      return {
-        id: Math.random().toString(36),
-        file: processedFile,
-        preview: URL.createObjectURL(file),
-        status: 'pending' as const,
-        progress: 0,
-        title: file.name.replace(/\.[^/.]+$/, ''),
-        compressedFile: processedFile !== file ? processedFile : undefined
-      }
-    })
+    return {
+      id: Math.random().toString(36),
+      file: processedFile,
+      preview: URL.createObjectURL(file),
+      status: 'pending' as const,
+      progress: 0,
+      title: file.name.replace(/\.[^/.]+$/, ''),
+      compressedFile: processedFile !== file ? processedFile : undefined
+    }
+  })
 
-    const uploadFilesResults = await Promise.all(uploadFilesPromises)
-    const validUploadFiles = uploadFilesResults.filter((file): file is UploadFile => file !== null)
-    setFiles(prev => [...prev, ...validUploadFiles])
-  }, [])
+  const uploadFilesResults = await Promise.all(uploadFilesPromises)
+  const validUploadFiles = uploadFilesResults.filter((file): file is UploadFile => file !== null)
+  setFiles(prev => [...prev, ...validUploadFiles])
+}, [])
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
