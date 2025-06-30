@@ -1,4 +1,4 @@
-// api/upload/route.ts - Debug Cloudinary credentials
+// /app/api/upload/route.ts - Vercel-compatible version
 import { NextRequest, NextResponse } from "next/server";
 import { v2 as cloudinary } from 'cloudinary';
 import { db } from "@/lib/db";
@@ -6,76 +6,23 @@ import { db } from "@/lib/db";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME!,
+  api_key: process.env.CLOUDINARY_API_KEY!,
+  api_secret: process.env.CLOUDINARY_API_SECRET!,
+  secure: true
+});
+
 export async function POST(req: NextRequest) {
   try {
-    console.log('🚀 Upload API called');
+    console.log('🚀 Upload API called - Vercel compatible version');
     
-    // Extract and validate environment variables with type safety
-    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-    const apiKey = process.env.CLOUDINARY_API_KEY;
-    const apiSecret = process.env.CLOUDINARY_API_SECRET;
-
-    // Debug environment variables
-    console.log('🔍 Environment variables check:', {
-      NODE_ENV: process.env.NODE_ENV,
-      CLOUDINARY_CLOUD_NAME: cloudName ? `SET (${cloudName})` : 'MISSING',
-      CLOUDINARY_API_KEY: apiKey ? `SET (${apiKey.substring(0, 5)}...)` : 'MISSING',
-      CLOUDINARY_API_SECRET: apiSecret ? 'SET (hidden)' : 'MISSING'
-    });
-
-    // Strict validation with detailed error messages
-    if (!cloudName) {
-      console.error('❌ CLOUDINARY_CLOUD_NAME is missing');
+    // Check environment variables
+    if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+      console.error('❌ Missing Cloudinary environment variables');
       return NextResponse.json(
-        { success: false, error: "CLOUDINARY_CLOUD_NAME environment variable is missing" },
-        { status: 500 }
-      );
-    }
-
-    if (!apiKey) {
-      console.error('❌ CLOUDINARY_API_KEY is missing');
-      return NextResponse.json(
-        { success: false, error: "CLOUDINARY_API_KEY environment variable is missing" },
-        { status: 500 }
-      );
-    }
-
-    if (!apiSecret) {
-      console.error('❌ CLOUDINARY_API_SECRET is missing');
-      return NextResponse.json(
-        { success: false, error: "CLOUDINARY_API_SECRET environment variable is missing" },
-        { status: 500 }
-      );
-    }
-
-    // Configure Cloudinary with validated variables
-    console.log('⚙️ Configuring Cloudinary with validated credentials...');
-    cloudinary.config({
-      cloud_name: cloudName,
-      api_key: apiKey,
-      api_secret: apiSecret,
-      secure: true
-    });
-
-    // Test Cloudinary connection BEFORE upload
-    console.log('🔍 Testing Cloudinary connection...');
-    try {
-      const pingResult = await cloudinary.api.ping();
-      console.log('✅ Cloudinary ping successful:', pingResult);
-    } catch (pingError: any) {
-      console.error('❌ Cloudinary ping failed:', {
-        message: pingError.message,
-        http_code: pingError.http_code,
-        error: pingError.error
-      });
-      
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: "Cloudinary authentication failed",
-          details: `Ping failed: ${pingError.message}`,
-          http_code: pingError.http_code
-        },
+        { success: false, error: "Cloudinary configuration missing" },
         { status: 500 }
       );
     }
@@ -133,7 +80,6 @@ export async function POST(req: NextRequest) {
     // Convert file to buffer
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
-    console.log(`📦 Buffer created: ${buffer.length} bytes`);
 
     // Create folder path
     let folderPath = "peysphotos";
@@ -144,84 +90,67 @@ export async function POST(req: NextRequest) {
     }
 
     const sanitizedTitle = title.replace(/[^a-zA-Z0-9]/g, '_');
-    const publicId = `${Date.now()}_${sanitizedTitle}`;
     
-    console.log('☁️ Cloudinary upload parameters:', {
-      folder: folderPath,
-      public_id: publicId,
-      buffer_size: buffer.length
-    });
+    console.log('☁️ Uploading to Cloudinary (Vercel-compatible method)...');
 
-    // Upload to Cloudinary with detailed error logging
-    let uploadResponse: any;
+    // FIXED: Use cloudinary.uploader.upload with base64 instead of upload_stream
+    // This method is more compatible with Vercel's serverless environment
+    let uploadResponse;
     try {
-      uploadResponse = await new Promise((resolve, reject) => {
-        const uploadOptions = {
-          folder: folderPath,
-          public_id: publicId,
-          resource_type: "image" as const,
-          transformation: [
-            { quality: "auto:good" },
-            { fetch_format: "auto" }
-          ]
-        };
+      // Convert buffer to base64 data URL
+      const base64 = buffer.toString('base64');
+      const dataURI = `data:${file.type};base64,${base64}`;
 
-        console.log('📤 Starting Cloudinary upload with options:', uploadOptions);
+      console.log('📤 Using base64 upload method...');
 
-        const uploadStream = cloudinary.uploader.upload_stream(
-          uploadOptions,
-          (error, result) => {
-            if (error) {
-              console.error('❌ Cloudinary upload_stream error:', {
-                message: error.message,
-                http_code: error.http_code,
-                error_code: error.error?.code,
-                error_message: error.error?.message,
-                full_error: error
-              });
-              reject(error);
-            } else if (result) {
-              console.log('✅ Cloudinary upload successful:', {
-                public_id: result.public_id,
-                secure_url: result.secure_url,
-                width: result.width,
-                height: result.height,
-                bytes: result.bytes
-              });
-              resolve(result);
-            } else {
-              console.error('❌ No result from Cloudinary upload');
-              reject(new Error('No result from Cloudinary'));
-            }
-          }
-        );
+      uploadResponse = await cloudinary.uploader.upload(dataURI, {
+        folder: folderPath,
+        public_id: `${Date.now()}_${sanitizedTitle}`,
+        resource_type: "image",
+        transformation: [
+          { quality: "auto:good" },
+          { fetch_format: "auto" }
+        ],
+        context: {
+          title: title,
+          category: category.name,
+          category_key: category.key,
+          uploaded_at: new Date().toISOString()
+        }
+      });
 
-        console.log('📤 Writing buffer to upload stream...');
-        uploadStream.end(buffer);
+      console.log('✅ Cloudinary upload successful:', {
+        public_id: uploadResponse.public_id,
+        secure_url: uploadResponse.secure_url,
+        width: uploadResponse.width,
+        height: uploadResponse.height,
+        format: uploadResponse.format,
+        bytes: uploadResponse.bytes
       });
 
     } catch (cloudinaryError: any) {
-      console.error('💥 Cloudinary upload failed:', cloudinaryError);
+      console.error('❌ Cloudinary upload failed:', {
+        name: cloudinaryError.name,
+        message: cloudinaryError.message,
+        http_code: cloudinaryError.http_code,
+        error: cloudinaryError.error
+      });
       
+      // More specific error handling
       let errorMessage = "Cloudinary upload failed";
-      let details = cloudinaryError.message || "Unknown Cloudinary error";
-      
       if (cloudinaryError.http_code === 401) {
-        errorMessage = "Cloudinary authentication failed - invalid credentials";
-        details = "Check your CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET";
+        errorMessage = "Cloudinary authentication failed";
       } else if (cloudinaryError.http_code === 400) {
-        errorMessage = "Invalid upload parameters";
-      } else if (cloudinaryError.http_code === 420) {
-        errorMessage = "Cloudinary rate limit exceeded";
+        errorMessage = "Invalid file or parameters";
+      } else if (cloudinaryError.message) {
+        errorMessage = cloudinaryError.message;
       }
       
       return NextResponse.json(
         { 
           success: false, 
           error: errorMessage,
-          details: details,
-          http_code: cloudinaryError.http_code,
-          cloudinary_error: cloudinaryError.error
+          details: cloudinaryError.message
         },
         { status: 500 }
       );
@@ -264,7 +193,7 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (error: any) {
-    console.error('💥 Unexpected upload error:', error);
+    console.error('💥 Upload error:', error);
     
     return NextResponse.json(
       { 
