@@ -44,16 +44,59 @@ export default function AdminDashboard({ children }: AdminDashboardProps) {
   }, [session])
 
   const fetchCategories = async () => {
-    try {
-      const response = await fetch('/api/categories?includePrivate=true')
-      if (response.ok) {
-        const data = await response.json()
-        setCategories(data.categories || [])
+  try {
+    console.log('🔍 Starting to fetch categories...')
+    const response = await fetch('/api/categories?includePrivate=true')
+    console.log('📡 Categories API response status:', response.status)
+    
+    if (response.ok) {
+      const data = await response.json()
+      console.log('📦 Raw API response data:', data)
+      
+      // FIX: Handle both response formats
+      let fetchedCategories = []
+      
+      if (Array.isArray(data)) {
+        // If the response is directly an array of categories
+        fetchedCategories = data
+        console.log('✅ API returned categories as direct array')
+      } else if (data.categories && Array.isArray(data.categories)) {
+        // If the response has a 'categories' property
+        fetchedCategories = data.categories
+        console.log('✅ API returned categories in categories property')
+      } else {
+        console.warn('⚠️ Unexpected API response format:', data)
+        fetchedCategories = []
       }
-    } catch (error: unknown) {
-      console.error('Failed to fetch categories:', error)
+      
+      console.log('📊 Number of categories processed:', fetchedCategories.length)
+      
+      if (fetchedCategories.length > 0) {
+        // Log each category for debugging
+        fetchedCategories.forEach((cat: Category, index: number) => {
+          console.log(`📁 Category ${index + 1}:`, {
+            id: cat.id,
+            name: cat.name,
+            key: cat.key,
+            isPrivate: cat.isPrivate,
+            parentId: cat.parentId,
+            _count: cat._count
+          })
+        })
+      }
+      
+      console.log('💾 Setting categories state to:', fetchedCategories)
+      setCategories(fetchedCategories)
+      
+    } else {
+      console.error('❌ Failed to fetch categories, status:', response.status)
+      const responseText = await response.text()
+      console.error('❌ Error response body:', responseText)
     }
+  } catch (error: unknown) {
+    console.error('💥 Exception while fetching categories:', error)
   }
+}
 
   const fetchStats = async () => {
     try {

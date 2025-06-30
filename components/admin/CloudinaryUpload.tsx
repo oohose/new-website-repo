@@ -170,9 +170,11 @@ const compressImage = (file: File, targetSizeMB: number = 4.5): Promise<File> =>
   })
 }
 
-// Category Picker Component
+// FIXED Category Picker Component
 function CategoryPicker({ categories, selectedCategoryId, onCategorySelect }: CategoryPickerProps) {
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
+  
+  console.log('🔍 CategoryPicker received categories:', categories.length, categories)
   
   const toggleExpanded = (categoryId: string, event: React.MouseEvent) => {
     event.preventDefault()
@@ -194,99 +196,42 @@ function CategoryPicker({ categories, selectedCategoryId, onCategorySelect }: Ca
     onCategorySelect(categoryId)
   }
 
-  const buildCategoryHierarchy = (categories: Category[]) => {
-    const categoryMap = new Map<string, Category & { subcategories: Category[] }>()
-    const rootCategories: (Category & { subcategories: Category[] })[] = []
-
-    categories.forEach(cat => {
-      categoryMap.set(cat.id, { ...cat, subcategories: [] })
-    })
-
-    categories.forEach(cat => {
-      const categoryWithSubs = categoryMap.get(cat.id)!
-      
-      if (cat.parentId) {
-        const parent = categoryMap.get(cat.parentId)
-        if (parent) {
-          parent.subcategories.push(categoryWithSubs)
-        } else {
-          rootCategories.push(categoryWithSubs)
-        }
-      } else {
-        rootCategories.push(categoryWithSubs)
-      }
-    })
-
-    return rootCategories
-  }
-
-  const renderCategory = (category: Category & { subcategories: Category[] }, level = 0) => {
-    const hasSubcategories = category.subcategories && category.subcategories.length > 0
-    const isExpanded = expandedCategories.has(category.id)
+  // SIMPLIFIED category rendering - just show all categories in a flat list
+  const renderSimpleCategory = (category: Category) => {
     const isSelected = selectedCategoryId === category.id
+    const imageCount = category._count?.images || 0
 
     return (
-      <div key={category.id} className={`${level > 0 ? 'ml-4' : ''}`}>
-        <div
-          className={`flex items-center space-x-2 p-3 rounded-lg cursor-pointer transition-all duration-200 ${
-            isSelected 
-              ? 'bg-blue-600 text-white shadow-md' 
-              : 'hover:bg-gray-700 text-gray-300 hover:text-white'
-          }`}
-          onClick={(e) => handleCategoryClick(category.id, e)}
-          style={{ minHeight: '48px' }}
-        >
-          {hasSubcategories && (
-            <button
-              onClick={(e) => toggleExpanded(category.id, e)}
-              className="p-1 hover:bg-gray-600 rounded transition-colors flex-shrink-0"
-              type="button"
-            >
-              {isExpanded ? (
-                <ChevronDown className="w-4 h-4" />
-              ) : (
-                <ChevronRight className="w-4 h-4" />
-              )}
-            </button>
-          )}
-          
-          {!hasSubcategories && level > 0 && <div className="w-6 flex-shrink-0" />}
-          
-          <div className="flex-shrink-0">
-            {hasSubcategories ? (
-              <FolderOpen className="w-5 h-5" />
-            ) : (
-              <Folder className="w-5 h-5" />
-            )}
-          </div>
-          
-          <span className="flex-1 text-sm font-medium truncate">
-            {level > 0 && '↳ '}{category.name}
-          </span>
-          
-          {category.isPrivate && (
-            <div className="flex-shrink-0">
-              <EyeOff className="w-3 h-3 text-red-400" />
-            </div>
-          )}
-          
-          <span className="text-xs text-gray-400 flex-shrink-0 min-w-[30px] text-right">
-            {category._count?.images || 0}
-          </span>
+      <div
+        key={category.id}
+        className={`flex items-center space-x-3 p-3 rounded-lg cursor-pointer transition-all duration-200 ${
+          isSelected 
+            ? 'bg-blue-600 text-white shadow-md' 
+            : 'hover:bg-gray-700 text-gray-300 hover:text-white'
+        }`}
+        onClick={(e) => handleCategoryClick(category.id, e)}
+        style={{ minHeight: '48px' }}
+      >
+        <div className="flex-shrink-0">
+          <Folder className="w-5 h-5" />
         </div>
         
-        {hasSubcategories && isExpanded && (
-          <div className="mt-1 space-y-1">
-            {category.subcategories.map(subcategory => 
-              renderCategory(subcategory, level + 1)
-            )}
+        <span className="flex-1 text-sm font-medium truncate">
+          {category.name}
+        </span>
+        
+        {category.isPrivate && (
+          <div className="flex-shrink-0">
+            <EyeOff className="w-3 h-3 text-red-400" />
           </div>
         )}
+        
+        <span className="text-xs text-gray-400 flex-shrink-0 min-w-[30px] text-right">
+          {imageCount}
+        </span>
       </div>
     )
   }
-
-  const hierarchicalCategories = buildCategoryHierarchy(categories)
 
   return (
     <div className="bg-gray-800 border border-gray-700 rounded-lg max-h-64 overflow-y-auto">
@@ -297,41 +242,19 @@ function CategoryPicker({ categories, selectedCategoryId, onCategorySelect }: Ca
           {selectedCategoryId && (
             <p className="text-blue-400">✓ Category selected</p>
           )}
+          {categories.length === 0 && (
+            <p className="text-yellow-400">⚠️ No categories found - check Categories tab</p>
+          )}
         </div>
       </div>
       
       <div className="p-2 space-y-1">
         {categories.length > 0 ? (
-          hierarchicalCategories.length > 0 ? (
-            <>
-              {hierarchicalCategories
-                .sort((a, b) => a.name.localeCompare(b.name))
-                .map(category => renderCategory(category))}
-              
-              {categories
-                .filter(cat => cat.parentId && !categories.find(parent => parent.id === cat.parentId))
-                .map(orphanedCat => (
-                  <div key={`orphaned-${orphanedCat.id}`} className="border-t border-gray-600 pt-2 mt-2">
-                    <div className="text-xs text-yellow-400 mb-1 px-2">Orphaned subcategories:</div>
-                    {renderCategory({ ...orphanedCat, subcategories: [] }, 0)}
-                  </div>
-                ))
-              }
-            </>
-          ) : (
-            <div className="p-4 text-center text-yellow-400">
-              <p className="text-sm">Found {categories.length} categories but couldn't build hierarchy</p>
-              <div className="mt-2 text-xs text-left bg-gray-700 rounded p-2">
-                {categories.map(cat => (
-                  <div key={cat.id} 
-                       className="cursor-pointer hover:bg-gray-600 p-1 rounded"
-                       onClick={(e) => handleCategoryClick(cat.id, e)}>
-                    {cat.name} {cat.parentId ? `(sub of ${cat.parentId})` : '(root)'}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )
+          <>
+            {categories
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .map(category => renderSimpleCategory(category))}
+          </>
         ) : (
           <div className="p-4 text-center text-gray-400">
             <p className="text-sm">No categories available</p>
@@ -350,6 +273,9 @@ export default function UploadComponent({ categories, onUploadComplete }: Upload
   const [isUploading, setIsUploading] = useState(false)
   const [dragActive, setDragActive] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Add debugging
+  console.log('🚀 UploadComponent rendered with categories:', categories.length, categories)
 
   const clearAllFiles = useCallback(() => {
     files.forEach(file => {
@@ -571,6 +497,23 @@ export default function UploadComponent({ categories, onUploadComplete }: Upload
 
   return (
     <div className="space-y-6">
+      {/* Debug info */}
+      <div className="bg-red-900/20 border border-red-700 rounded-lg p-4">
+        <h4 className="text-red-400 font-medium mb-2">Debug Info</h4>
+        <div className="text-sm space-y-1">
+          <p className="text-gray-300">Categories received: <span className="text-white">{categories.length}</span></p>
+          <p className="text-gray-300">Selected category ID: <span className="text-white">{selectedCategoryId || 'none'}</span></p>
+          {categories.length > 0 && (
+            <details className="mt-2">
+              <summary className="text-blue-400 cursor-pointer text-xs">View Raw Categories</summary>
+              <pre className="text-xs text-gray-300 bg-gray-900 p-2 rounded mt-1 overflow-auto max-h-32">
+                {JSON.stringify(categories, null, 2)}
+              </pre>
+            </details>
+          )}
+        </div>
+      </div>
+
       <CategoryPicker
         categories={categories}
         selectedCategoryId={selectedCategoryId}
