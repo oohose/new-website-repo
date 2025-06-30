@@ -1,10 +1,10 @@
-// api/upload/route.ts - Fixed to use your db import
+// api/upload/route.ts - Production-ready with better error handling
 import { writeFile, unlink } from "fs/promises";
 import path from "path";
 import os from "os";
 import { NextRequest, NextResponse } from "next/server";
 import cloudinary from "@/lib/cloudinary";
-import { db } from "@/lib/db"; // ✅ Use the same db import as your other files
+import { db } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -13,8 +13,29 @@ export async function POST(req: NextRequest) {
   let tempFilePath: string | null = null;
 
   try {
-    console.log('🚀 Upload API called');
+    console.log('🚀 Upload API called - Environment:', process.env.NODE_ENV);
     
+    // Check environment variables first (common deployment issue)
+    const requiredEnvVars = [
+      'CLOUDINARY_CLOUD_NAME',
+      'CLOUDINARY_API_KEY', 
+      'CLOUDINARY_API_SECRET',
+      'DATABASE_URL'
+    ];
+    
+    const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
+    if (missingEnvVars.length > 0) {
+      console.error('❌ Missing environment variables:', missingEnvVars);
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: "Server configuration error - missing environment variables",
+          details: `Missing: ${missingEnvVars.join(', ')}`
+        },
+        { status: 500 }
+      );
+    }
+
     const contentLength = req.headers.get('content-length');
     if (contentLength) {
       const sizeMB = parseInt(contentLength) / 1024 / 1024;
@@ -28,17 +49,29 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const formData = await req.formData();
+    // Parse form data with error handling
+    let formData;
+    try {
+      formData = await req.formData();
+    } catch (formError) {
+      console.error('❌ Failed to parse form data:', formError);
+      return NextResponse.json(
+        { success: false, error: "Invalid form data" },
+        { status: 400 }
+      );
+    }
+
     const file = formData.get("file") as File;
     const title = formData.get("title") as string;
     const categoryId = formData.get("categoryId") as string;
 
     console.log('📝 Upload details:', {
-      fileName: file.name,
+      fileName: file?.name,
       fileSize: file ? `${(file.size / 1024 / 1024).toFixed(2)}MB` : 'No file',
       fileType: file?.type,
       title,
-      categoryId
+      categoryId,
+      hasFile: !!file
     });
 
     // Validate required fields
@@ -77,155 +110,151 @@ export async function POST(req: NextRequest) {
 
     // Test database connection first
     console.log('🔍 Testing database connection...');
+    let category;
     try {
-      const dbTest = await db.category.findUnique({
+      category = await db.category.findUnique({
         where: { id: categoryId },
         select: { id: true, key: true, name: true, parent: { select: { key: true, name: true } } }
       });
-      console.log('✅ Database connection successful, category found:', dbTest);
       
-      if (!dbTest) {
+      if (!category) {
         console.error('❌ Category not found in database:', categoryId);
         return NextResponse.json(
           { success: false, error: "Category not found." },
           { status: 400 }
         );
       }
-    } catch (dbTestError) {
+      
+      console.log('✅ Database connection successful, category found:', category);
+      
+    } catch (dbTestError: any) {
       console.error('❌ Database connection failed:', dbTestError);
       return NextResponse.json(
-        { success: false, error: "Database connection failed.", details: dbTestError instanceof Error ? dbTestError.message : String(dbTestError) },
+        { 
+          success: false, 
+          error: "Database connection failed", 
+          details: dbTestError.message 
+        },
         { status: 500 }
       );
     }
 
-    // Convert file to buffer and write to temp file
-    console.log('📁 Creating temp file...');
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-
-    const fileExtension = path.extname(file.name);
-    const sanitizedTitle = title.replace(/[^a-zA-Z0-9]/g, '_');
-    const uniqueFilename = `${Date.now()}_${sanitizedTitle}${fileExtension}`;
-    tempFilePath = path.join(os.tmpdir(), uniqueFilename);
-    
-    await writeFile(tempFilePath, buffer);
-    console.log("✅ Temp file written to:", tempFilePath);
-
-    // Get category info to create proper folder structure
-    console.log('🔍 Fetching category details...');
-    const category = await db.category.findUnique({
-      where: { id: categoryId },
-      select: { key: true, name: true, parent: { select: { key: true, name: true } } }
-    });
-
-    if (!category) {
-      console.error('❌ Category not found:', categoryId);
+    // File processing with better error handling
+    console.log('📁 Processing file...');
+    let bytes;
+    try {
+      bytes = await file.arrayBuffer();
+    } catch (fileError) {
+      console.error('❌ Failed to read file:', fileError);
       return NextResponse.json(
-        { success: false, error: "Category not found." },
+        { success: false, error: "Failed to process uploaded file" },
         { status: 400 }
       );
     }
 
-    console.log('✅ Category details:', category);
+    const buffer = Buffer.from(bytes);
+    const fileExtension = path.extname(file.name) || '.jpg';
+    const sanitizedTitle = title.replace(/[^a-zA-Z0-9]/g, '_');
+    const uniqueFilename = `${Date.now()}_${sanitizedTitle}${fileExtension}`;
+    
+    // Create temp file with error handling
+    try {
+      tempFilePath = path.join(os.tmpdir(), uniqueFilename);
+      await writeFile(tempFilePath, buffer);
+      console.log("✅ Temp file created:", tempFilePath);
+    } catch (tempFileError) {
+      console.error('❌ Failed to create temp file:', tempFileError);
+      return NextResponse.json(
+        { success: false, error: "Failed to process file for upload" },
+        { status: 500 }
+      );
+    }
 
-    // Create folder path: peysphotos/parent-category/sub-category OR peysphotos/category
+    // Create folder path
     let folderPath = "peysphotos";
     if (category.parent) {
-      // This is a subcategory
       folderPath = `peysphotos/${category.parent.key}/${category.key}`;
     } else {
-      // This is a top-level category
       folderPath = `peysphotos/${category.key}`;
     }
 
-    console.log(`📁 Creating folder structure: ${folderPath}`);
+    console.log(`📁 Cloudinary folder: ${folderPath}`);
 
-    // Upload to Cloudinary with dynamic folder structure
+    // Upload to Cloudinary with detailed error handling
     console.log('☁️ Uploading to Cloudinary...');
-    const uploadResponse = await cloudinary.uploader.upload(tempFilePath, {
-      folder: folderPath,
-      public_id: `${Date.now()}_${sanitizedTitle}`,
-      resource_type: "image",
-      transformation: [
-        { quality: "auto:good" },
-        { fetch_format: "auto" }
-      ],
-      context: {
-        title: title,
-        category: category.name,
-        category_key: category.key,
-        uploaded_at: new Date().toISOString()
-      }
-    });
-
-    console.log("✅ Cloudinary upload successful:", {
-      public_id: uploadResponse.public_id,
-      secure_url: uploadResponse.secure_url,
-      width: uploadResponse.width,
-      height: uploadResponse.height,
-      format: uploadResponse.format,
-      bytes: uploadResponse.bytes
-    });
-
-    // Save to database using your exact schema fields
-    console.log("💾 Saving to database...");
-    
+    let uploadResponse;
     try {
-      const savedImage = await db.image.create({
+      uploadResponse = await cloudinary.uploader.upload(tempFilePath, {
+        folder: folderPath,
+        public_id: `${Date.now()}_${sanitizedTitle}`,
+        resource_type: "image",
+        transformation: [
+          { quality: "auto:good" },
+          { fetch_format: "auto" }
+        ],
+        context: {
+          title: title,
+          category: category.name,
+          category_key: category.key,
+          uploaded_at: new Date().toISOString()
+        }
+      });
+
+      console.log("✅ Cloudinary upload successful:", {
+        public_id: uploadResponse.public_id,
+        secure_url: uploadResponse.secure_url,
+        width: uploadResponse.width,
+        height: uploadResponse.height,
+        format: uploadResponse.format,
+        bytes: uploadResponse.bytes
+      });
+
+    } catch (cloudinaryError: any) {
+      console.error("❌ Cloudinary upload failed:", cloudinaryError);
+      
+      // Clean up temp file
+      if (tempFilePath) {
+        try {
+          await unlink(tempFilePath);
+        } catch {}
+      }
+      
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: "Failed to upload image to cloud storage",
+          details: cloudinaryError.message || "Cloudinary upload failed"
+        },
+        { status: 500 }
+      );
+    }
+
+    // Save to database with detailed error handling
+    console.log("💾 Saving to database...");
+    let savedImage;
+    try {
+      savedImage = await db.image.create({
         data: {
           title: title,
-          description: null, // Optional field in your schema
-          cloudinaryId: uploadResponse.public_id, // This matches your schema field name
+          description: null,
+          cloudinaryId: uploadResponse.public_id,
           url: uploadResponse.secure_url,
           width: uploadResponse.width,
           height: uploadResponse.height,
           format: uploadResponse.format,
-          bytes: uploadResponse.bytes, // This matches your schema field name
-          isHeader: false, // Default value for your existing field
-          order: 0, // Default value for your existing field
+          bytes: uploadResponse.bytes,
+          isHeader: false,
+          order: 0,
           categoryId: categoryId,
         }
       });
       
       console.log("✅ Image saved to database with ID:", savedImage.id);
       
-      // Clean up temp file
-      if (tempFilePath) {
-        try {
-          await unlink(tempFilePath);
-          console.log("🧹 Temp file cleaned up");
-        } catch (cleanupError) {
-          console.warn("⚠️ Failed to cleanup temp file:", cleanupError);
-        }
-      }
-
-      return NextResponse.json({
-        success: true,
-        message: "Image uploaded successfully",
-        data: {
-          id: savedImage.id,
-          cloudinaryId: uploadResponse.public_id,
-          url: uploadResponse.secure_url,
-          title,
-          categoryId,
-          width: uploadResponse.width,
-          height: uploadResponse.height,
-          format: uploadResponse.format,
-          size: uploadResponse.bytes
-        }
-      });
-      
     } catch (dbError: any) {
       console.error("❌ Database save failed:", dbError);
-      console.error("❌ Database error details:", {
-        name: dbError.name,
-        message: dbError.message,
-        code: dbError.code,
-        stack: dbError.stack
-      });
       
-      // If database save fails, we should clean up the Cloudinary upload
+      // Clean up Cloudinary upload since database save failed
       try {
         await cloudinary.uploader.destroy(uploadResponse.public_id);
         console.log("🧹 Cleaned up Cloudinary upload due to database error");
@@ -244,9 +273,38 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Clean up temp file
+    if (tempFilePath) {
+      try {
+        await unlink(tempFilePath);
+        console.log("🧹 Temp file cleaned up");
+      } catch (cleanupError) {
+        console.warn("⚠️ Failed to cleanup temp file:", cleanupError);
+      }
+    }
+
+    // Success response
+    const response = {
+      success: true,
+      message: "Image uploaded successfully",
+      data: {
+        id: savedImage.id,
+        cloudinaryId: uploadResponse.public_id,
+        url: uploadResponse.secure_url,
+        title,
+        categoryId,
+        width: uploadResponse.width,
+        height: uploadResponse.height,
+        format: uploadResponse.format,
+        size: uploadResponse.bytes
+      }
+    };
+
+    console.log("🎉 Upload completed successfully");
+    return NextResponse.json(response);
+
   } catch (error: any) {
-    console.error("❌ Upload error:", error?.message || error);
-    console.error("❌ Error details:", {
+    console.error("💥 Unexpected upload error:", {
       name: error?.name,
       message: error?.message,
       stack: error?.stack,
@@ -263,25 +321,13 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    if (error?.message?.includes('File size too large')) {
-      return NextResponse.json(
-        { success: false, error: "File too large for Cloudinary. Please compress the image." },
-        { status: 413 }
-      );
-    }
-
-    if (error?.http_code === 400) {
-      return NextResponse.json(
-        { success: false, error: "Invalid file format or corrupted file." },
-        { status: 400 }
-      );
-    }
-
+    // Return a proper JSON error response
     return NextResponse.json(
       { 
         success: false, 
-        error: error?.message || "Failed to upload image. Please try again.",
-        details: error?.stack || "No stack trace available"
+        error: "Upload failed due to server error",
+        details: error?.message || "Unknown error occurred",
+        timestamp: new Date().toISOString()
       },
       { status: 500 }
     );
