@@ -1,4 +1,4 @@
-/* Full ImageManager.tsx with ModalWrapper integration */
+/* Fixed ImageManager.tsx with working image selection */
 
 'use client'
 
@@ -34,6 +34,10 @@ interface ImageWithCategory extends ImageType {
   description?: string | null
   isHeader?: boolean
   displayOrder?: number | null
+  width?: number
+  height?: number
+  format?: string
+  bytes?: number
 }
 
 function ImageEditModal({ image, onClose, onSave, isSaving }: {
@@ -210,12 +214,52 @@ export default function ImageManager({ categories }: ImageManagerProps) {
     }
   }
 
-  const toggleSelect = (id: string) => {
+  // FIXED: Better toggle select function with debugging
+  const toggleSelect = (imageId: string, event?: React.MouseEvent) => {
+    if (event) {
+      event.preventDefault()
+      event.stopPropagation()
+    }
+    
+    console.log('🔄 Toggling selection for image:', imageId)
+    console.log('📊 Current selected images:', Array.from(selectedImages))
+    
     setSelectedImages(prev => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return next
+      const newSet = new Set(prev)
+      if (newSet.has(imageId)) {
+        newSet.delete(imageId)
+        console.log('➖ Removed from selection:', imageId)
+      } else {
+        newSet.add(imageId)
+        console.log('➕ Added to selection:', imageId)
+      }
+      console.log('📊 New selected images:', Array.from(newSet))
+      return newSet
     })
+  }
+
+  // FIXED: Better select mode toggle with cleanup
+  const toggleSelectMode = () => {
+    if (isSelectMode) {
+      // Exiting select mode - clear selections
+      setSelectedImages(new Set())
+      console.log('🚫 Exiting select mode, cleared selections')
+    } else {
+      console.log('✅ Entering select mode')
+    }
+    setIsSelectMode(!isSelectMode)
+  }
+
+  // FIXED: Select all/none functionality
+  const selectAll = () => {
+    const allImageIds = new Set(filteredImages.map(img => img.id))
+    setSelectedImages(allImageIds)
+    console.log('✅ Selected all images:', Array.from(allImageIds))
+  }
+
+  const selectNone = () => {
+    setSelectedImages(new Set())
+    console.log('🚫 Cleared all selections')
   }
 
   return (
@@ -224,10 +268,14 @@ export default function ImageManager({ categories }: ImageManagerProps) {
         <h2 className="text-2xl font-bold text-white">Image Manager</h2>
         <div className="flex space-x-2">
           <button
-            onClick={() => setIsSelectMode(!isSelectMode)}
-            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg"
+            onClick={toggleSelectMode}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              isSelectMode 
+                ? 'bg-red-600 hover:bg-red-700 text-white' 
+                : 'bg-gray-700 hover:bg-gray-600 text-white'
+            }`}
           >
-            {isSelectMode ? 'Cancel' : 'Select'}
+            {isSelectMode ? 'Cancel Selection' : 'Select Images'}
           </button>
           <button
             onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
@@ -238,29 +286,128 @@ export default function ImageManager({ categories }: ImageManagerProps) {
         </div>
       </div>
 
-      {isSelectMode && selectedImages.size > 0 && (
-        <div className="flex justify-between items-center bg-gray-800 p-4 rounded-lg">
-          <span className="text-white">Selected: {selectedImages.size}</span>
-          <button
-            onClick={() => setShowBulkDelete(true)}
-            className="inline-flex items-center px-4 py-2 text-sm font-medium text-red-300 bg-red-600/20 border border-red-500/30 rounded-md hover:bg-red-600/30 hover:border-red-500/50 transition-colors"
-          >
-            Delete Selected
-          </button>
+      {/* ENHANCED: Selection controls */}
+      {isSelectMode && (
+        <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center space-x-4">
+              <span className="text-white font-medium">
+                Selected: {selectedImages.size} of {filteredImages.length}
+              </span>
+              <div className="flex space-x-2">
+                <button
+                  onClick={selectAll}
+                  className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+                >
+                  Select All
+                </button>
+                <span className="text-gray-500">|</span>
+                <button
+                  onClick={selectNone}
+                  className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+                >
+                  Clear All
+                </button>
+              </div>
+            </div>
+            
+            {selectedImages.size > 0 && (
+              <button
+                onClick={() => setShowBulkDelete(true)}
+                className="inline-flex items-center px-4 py-2 text-sm font-medium text-red-300 bg-red-600/20 border border-red-500/30 rounded-md hover:bg-red-600/30 hover:border-red-500/50 transition-colors"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete Selected ({selectedImages.size})
+              </button>
+            )}
+          </div>
         </div>
       )}
 
+      {/* Search and filters */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+          <input
+            type="text"
+            placeholder="Search images..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+          />
+        </div>
+        
+        <select
+          value={selectedCategory}
+          onChange={(e) => setSelectedCategory(e.target.value)}
+          className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
+        >
+          <option value="all">All Categories</option>
+          {categories.map(category => (
+            <option key={category.id} value={category.id}>
+              {category.name}
+            </option>
+          ))}
+        </select>
+        
+        <button
+          onClick={() => setShowPrivateOnly(!showPrivateOnly)}
+          className={`flex items-center justify-center px-4 py-2 rounded-lg transition-colors ${
+            showPrivateOnly 
+              ? 'bg-orange-600 hover:bg-orange-700 text-white' 
+              : 'bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700'
+          }`}
+        >
+          {showPrivateOnly ? <EyeOff className="w-4 h-4 mr-2" /> : <Eye className="w-4 h-4 mr-2" />}
+          {showPrivateOnly ? 'Private Only' : 'Show Private'}
+        </button>
+      </div>
+
+      {/* Results count */}
+      <div className="text-sm text-gray-400">
+        Showing {filteredImages.length} of {images.length} images
+      </div>
+
+      {/* Images grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {filteredImages.map(image => (
-          <div key={image.id} className={`bg-gray-800 border rounded-lg overflow-hidden relative ${selectedImages.has(image.id) ? 'ring-2 ring-blue-500' : ''}`}>
+          <div 
+            key={image.id} 
+            className={`bg-gray-800 border rounded-lg overflow-hidden relative transition-all duration-200 ${
+              selectedImages.has(image.id) 
+                ? 'ring-2 ring-blue-500 bg-gray-750' 
+                : 'border-gray-700 hover:border-gray-600'
+            } ${isSelectMode ? 'cursor-pointer' : ''}`}
+            onClick={isSelectMode ? (e) => toggleSelect(image.id, e) : undefined}
+          >
+            {/* Selection indicator - shows when in select mode */}
             {isSelectMode && (
-              <button
-                onClick={() => toggleSelect(image.id)}
-                className="absolute top-2 left-2 bg-black/60 p-1 rounded"
-              >
-                {selectedImages.has(image.id) ? <CheckSquare className="text-blue-400 w-5 h-5" /> : <Square className="text-white w-5 h-5" />}
-              </button>
+              <div className="absolute top-2 left-2 z-10 bg-black/70 p-2 rounded-full pointer-events-none">
+                {selectedImages.has(image.id) ? (
+                  <CheckSquare className="text-blue-400 w-5 h-5" />
+                ) : (
+                  <Square className="text-white w-5 h-5" />
+                )}
+              </div>
             )}
+
+            {/* Private indicator */}
+            {image.category.isPrivate && (
+              <div className="absolute top-2 right-2 bg-red-600/80 text-white text-xs px-2 py-1 rounded-full pointer-events-none">
+                <EyeOff className="w-3 h-3" />
+              </div>
+            )}
+
+            {/* Selection overlay - visible when in select mode */}
+            {isSelectMode && (
+              <div className={`absolute inset-0 z-20 transition-all duration-200 pointer-events-none ${
+                selectedImages.has(image.id) 
+                  ? 'bg-blue-500/30' 
+                  : 'bg-transparent hover:bg-white/10'
+              }`} />
+            )}
+
+            {/* Image */}
             <div className="relative aspect-square">
               <Image
                 src={`https://res.cloudinary.com/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,w_300,h_300,q_auto,f_auto/${image.cloudinaryId}`}
@@ -269,31 +416,60 @@ export default function ImageManager({ categories }: ImageManagerProps) {
                 className="object-cover"
               />
             </div>
-            <div className="p-3 text-sm text-white">
-              <div className="font-semibold truncate">{image.title}</div>
-              <div className="text-xs text-gray-400">{image.category.name}</div>
-              <div className="flex justify-between items-center mt-2">
-                <span className="text-xs text-gray-500">{new Date(image.createdAt).toLocaleDateString()}</span>
-                <div className="flex space-x-2">
-                  <button
-                    onClick={() => setEditImage(image)}
-                    className="inline-flex items-center px-4 py-2 text-sm font-medium text-blue-300 bg-blue-600/20 border border-blue-500/30 rounded-md hover:bg-blue-600/30 hover:border-blue-500/50 transition-colors"
-                  >
-                    <Edit2 className="w-4 h-4 mr-2" /> Edit
-                  </button>
-                  <ImageDeleteButton
-                    imageId={image.id}
-                    imageName={image.title}
-                    onDelete={() => handleDelete(image.id)}
-                    size="md"
-                    variant="button"
-                  />
+
+            {/* Image info and actions */}
+            <div 
+              className="p-3"
+              onClick={!isSelectMode ? undefined : (e) => e.stopPropagation()}
+            >
+              <div className="text-sm text-white">
+                <div className="font-semibold truncate mb-1">{image.title}</div>
+                <div className="text-xs text-gray-400 mb-2">{image.category.name}</div>
+                
+                <div className="flex justify-between items-center text-xs text-gray-500 mb-3">
+                  <span>{new Date(image.createdAt).toLocaleDateString()}</span>
+                  {image.width && image.height ? (
+                    <span>{image.width} × {image.height}</span>
+                  ) : (
+                    <span>Unknown size</span>
+                  )}
                 </div>
+
+                {/* Action buttons - only show when not in select mode */}
+                {!isSelectMode && (
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => setEditImage(image)}
+                      className="flex-1 inline-flex items-center justify-center px-3 py-2 text-xs font-medium text-blue-300 bg-blue-600/20 border border-blue-500/30 rounded-md hover:bg-blue-600/30 hover:border-blue-500/50 transition-colors"
+                    >
+                      <Edit2 className="w-3 h-3 mr-1" /> Edit
+                    </button>
+                    <ImageDeleteButton
+                      imageId={image.id}
+                      imageName={image.title}
+                      onDelete={() => handleDelete(image.id)}
+                      size="sm"
+                      variant="button"
+                    />
+                  </div>
+                )}
               </div>
             </div>
           </div>
         ))}
       </div>
+
+      {filteredImages.length === 0 && (
+        <div className="text-center py-12">
+          <div className="text-gray-400 text-lg mb-2">No images found</div>
+          <div className="text-gray-500 text-sm">
+            {searchTerm || selectedCategory !== 'all' || showPrivateOnly
+              ? 'Try adjusting your filters'
+              : 'Upload some images to get started'
+            }
+          </div>
+        </div>
+      )}
 
       {/* Edit Modal */}
       {editImage && (
@@ -308,21 +484,39 @@ export default function ImageManager({ categories }: ImageManagerProps) {
       {/* Bulk Delete Modal */}
       <ModalWrapper isOpen={showBulkDelete} onClose={() => setShowBulkDelete(false)}>
         <div className="p-6">
-          <h3 className="text-white text-lg font-bold mb-4">Confirm Bulk Delete</h3>
-          <p className="text-gray-300 mb-6">Are you sure you want to delete {selectedImages.size} selected images? This cannot be undone.</p>
+          <div className="flex items-center space-x-3 mb-4">
+            <AlertTriangle className="w-6 h-6 text-red-400" />
+            <h3 className="text-white text-lg font-bold">Confirm Bulk Delete</h3>
+          </div>
+          
+          <p className="text-gray-300 mb-6">
+            Are you sure you want to delete <strong>{selectedImages.size}</strong> selected images? 
+            This action cannot be undone.
+          </p>
+          
           <div className="flex justify-end space-x-3">
             <button
               onClick={() => setShowBulkDelete(false)}
-              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg"
+              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleBulkDelete}
               disabled={isBulkDeleting}
-              className="inline-flex items-center px-4 py-2 text-sm font-medium text-red-300 bg-red-600/20 border border-red-500/30 rounded-md hover:bg-red-600/30 hover:border-red-500/50 transition-colors"
+              className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50"
             >
-              {isBulkDeleting ? 'Deleting...' : 'Delete'}
+              {isBulkDeleting ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete {selectedImages.size} Images
+                </>
+              )}
             </button>
           </div>
         </div>
