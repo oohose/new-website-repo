@@ -1,4 +1,4 @@
-// api/upload/route.ts - Clean and simple version
+// api/upload/route.ts - Debug Cloudinary credentials
 import { NextRequest, NextResponse } from "next/server";
 import { v2 as cloudinary } from 'cloudinary';
 import { db } from "@/lib/db";
@@ -6,23 +6,76 @@ import { db } from "@/lib/db";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-// Configure Cloudinary
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME!,
-  api_key: process.env.CLOUDINARY_API_KEY!,
-  api_secret: process.env.CLOUDINARY_API_SECRET!,
-  secure: true
-});
-
 export async function POST(req: NextRequest) {
   try {
     console.log('🚀 Upload API called');
     
-    // Check environment variables
-    if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
-      console.error('❌ Missing Cloudinary environment variables');
+    // Extract and validate environment variables with type safety
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+    const apiKey = process.env.CLOUDINARY_API_KEY;
+    const apiSecret = process.env.CLOUDINARY_API_SECRET;
+
+    // Debug environment variables
+    console.log('🔍 Environment variables check:', {
+      NODE_ENV: process.env.NODE_ENV,
+      CLOUDINARY_CLOUD_NAME: cloudName ? `SET (${cloudName})` : 'MISSING',
+      CLOUDINARY_API_KEY: apiKey ? `SET (${apiKey.substring(0, 5)}...)` : 'MISSING',
+      CLOUDINARY_API_SECRET: apiSecret ? 'SET (hidden)' : 'MISSING'
+    });
+
+    // Strict validation with detailed error messages
+    if (!cloudName) {
+      console.error('❌ CLOUDINARY_CLOUD_NAME is missing');
       return NextResponse.json(
-        { success: false, error: "Cloudinary configuration missing" },
+        { success: false, error: "CLOUDINARY_CLOUD_NAME environment variable is missing" },
+        { status: 500 }
+      );
+    }
+
+    if (!apiKey) {
+      console.error('❌ CLOUDINARY_API_KEY is missing');
+      return NextResponse.json(
+        { success: false, error: "CLOUDINARY_API_KEY environment variable is missing" },
+        { status: 500 }
+      );
+    }
+
+    if (!apiSecret) {
+      console.error('❌ CLOUDINARY_API_SECRET is missing');
+      return NextResponse.json(
+        { success: false, error: "CLOUDINARY_API_SECRET environment variable is missing" },
+        { status: 500 }
+      );
+    }
+
+    // Configure Cloudinary with validated variables
+    console.log('⚙️ Configuring Cloudinary with validated credentials...');
+    cloudinary.config({
+      cloud_name: cloudName,
+      api_key: apiKey,
+      api_secret: apiSecret,
+      secure: true
+    });
+
+    // Test Cloudinary connection BEFORE upload
+    console.log('🔍 Testing Cloudinary connection...');
+    try {
+      const pingResult = await cloudinary.api.ping();
+      console.log('✅ Cloudinary ping successful:', pingResult);
+    } catch (pingError: any) {
+      console.error('❌ Cloudinary ping failed:', {
+        message: pingError.message,
+        http_code: pingError.http_code,
+        error: pingError.error
+      });
+      
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: "Cloudinary authentication failed",
+          details: `Ping failed: ${pingError.message}`,
+          http_code: pingError.http_code
+        },
         { status: 500 }
       );
     }
@@ -80,6 +133,7 @@ export async function POST(req: NextRequest) {
     // Convert file to buffer
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
+    console.log(`📦 Buffer created: ${buffer.length} bytes`);
 
     // Create folder path
     let folderPath = "peysphotos";
@@ -90,36 +144,88 @@ export async function POST(req: NextRequest) {
     }
 
     const sanitizedTitle = title.replace(/[^a-zA-Z0-9]/g, '_');
+    const publicId = `${Date.now()}_${sanitizedTitle}`;
     
-    console.log('☁️ Uploading to Cloudinary...');
+    console.log('☁️ Cloudinary upload parameters:', {
+      folder: folderPath,
+      public_id: publicId,
+      buffer_size: buffer.length
+    });
 
-    // Upload to Cloudinary using upload_stream
-    const uploadResponse: any = await new Promise((resolve, reject) => {
-      const uploadStream = cloudinary.uploader.upload_stream(
-        {
+    // Upload to Cloudinary with detailed error logging
+    let uploadResponse: any;
+    try {
+      uploadResponse = await new Promise((resolve, reject) => {
+        const uploadOptions = {
           folder: folderPath,
-          public_id: `${Date.now()}_${sanitizedTitle}`,
-          resource_type: "image",
+          public_id: publicId,
+          resource_type: "image" as const,
           transformation: [
             { quality: "auto:good" },
             { fetch_format: "auto" }
           ]
-        },
-        (error, result) => {
-          if (error) {
-            console.error('❌ Cloudinary error:', error);
-            reject(error);
-          } else if (result) {
-            console.log('✅ Cloudinary success:', result.public_id);
-            resolve(result);
-          } else {
-            reject(new Error('No result from Cloudinary'));
-          }
-        }
-      );
+        };
 
-      uploadStream.end(buffer);
-    });
+        console.log('📤 Starting Cloudinary upload with options:', uploadOptions);
+
+        const uploadStream = cloudinary.uploader.upload_stream(
+          uploadOptions,
+          (error, result) => {
+            if (error) {
+              console.error('❌ Cloudinary upload_stream error:', {
+                message: error.message,
+                http_code: error.http_code,
+                error_code: error.error?.code,
+                error_message: error.error?.message,
+                full_error: error
+              });
+              reject(error);
+            } else if (result) {
+              console.log('✅ Cloudinary upload successful:', {
+                public_id: result.public_id,
+                secure_url: result.secure_url,
+                width: result.width,
+                height: result.height,
+                bytes: result.bytes
+              });
+              resolve(result);
+            } else {
+              console.error('❌ No result from Cloudinary upload');
+              reject(new Error('No result from Cloudinary'));
+            }
+          }
+        );
+
+        console.log('📤 Writing buffer to upload stream...');
+        uploadStream.end(buffer);
+      });
+
+    } catch (cloudinaryError: any) {
+      console.error('💥 Cloudinary upload failed:', cloudinaryError);
+      
+      let errorMessage = "Cloudinary upload failed";
+      let details = cloudinaryError.message || "Unknown Cloudinary error";
+      
+      if (cloudinaryError.http_code === 401) {
+        errorMessage = "Cloudinary authentication failed - invalid credentials";
+        details = "Check your CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET";
+      } else if (cloudinaryError.http_code === 400) {
+        errorMessage = "Invalid upload parameters";
+      } else if (cloudinaryError.http_code === 420) {
+        errorMessage = "Cloudinary rate limit exceeded";
+      }
+      
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: errorMessage,
+          details: details,
+          http_code: cloudinaryError.http_code,
+          cloudinary_error: cloudinaryError.error
+        },
+        { status: 500 }
+      );
+    }
 
     // Save to database
     console.log('💾 Saving to database...');
@@ -158,27 +264,8 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (error: any) {
-    console.error('💥 Upload error:', error);
+    console.error('💥 Unexpected upload error:', error);
     
-    // Handle specific Cloudinary errors
-    if (error.http_code) {
-      let errorMessage = "Cloudinary upload failed";
-      if (error.http_code === 401) {
-        errorMessage = "Cloudinary authentication failed";
-      } else if (error.http_code === 400) {
-        errorMessage = "Invalid file or parameters";
-      }
-      
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: errorMessage,
-          details: error.message
-        },
-        { status: 500 }
-      );
-    }
-
     return NextResponse.json(
       { 
         success: false, 
