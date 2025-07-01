@@ -1,4 +1,4 @@
-// ✅ Fixed AdminDashboard.tsx with proper navbar spacing and improved layout
+// ✅ Fixed AdminDashboard.tsx with proper subcategory handling
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -29,6 +29,7 @@ export default function AdminDashboard({ children }: AdminDashboardProps) {
     storageUsed: '0 MB'
   })
   const [categories, setCategories] = useState<Category[]>([])
+  const [allCategories, setAllCategories] = useState<Category[]>([]) // All categories including subcategories
 
   useEffect(() => {
     if (status === 'loading') return
@@ -69,7 +70,29 @@ export default function AdminDashboard({ children }: AdminDashboardProps) {
         fetchedCategories = []
       }
       
-      console.log('📊 Number of categories processed:', fetchedCategories.length)
+      console.log('📊 Number of top-level categories processed:', fetchedCategories.length)
+      
+      // Extract all categories (including subcategories) for dropdown usage
+      const allCats: Category[] = []
+      
+      const addCategoriesRecursively = (cats: Category[], level = 0) => {
+        cats.forEach(cat => {
+          // Add the category with level info for display purposes
+          allCats.push({
+            ...cat,
+            displayName: '  '.repeat(level) + cat.name // Add indentation for subcategories
+          })
+          
+          // Add subcategories recursively
+          if (cat.subcategories && cat.subcategories.length > 0) {
+            addCategoriesRecursively(cat.subcategories, level + 1)
+          }
+        })
+      }
+      
+      addCategoriesRecursively(fetchedCategories)
+      
+      console.log('📊 Total categories (including subcategories):', allCats.length)
       
       if (fetchedCategories.length > 0) {
         // Log each category for debugging
@@ -80,13 +103,15 @@ export default function AdminDashboard({ children }: AdminDashboardProps) {
             key: cat.key,
             isPrivate: cat.isPrivate,
             parentId: cat.parentId,
+            subcategoriesCount: cat.subcategories?.length || 0,
             _count: cat._count
           })
         })
       }
       
       console.log('💾 Setting categories state to:', fetchedCategories)
-      setCategories(fetchedCategories)
+      setCategories(fetchedCategories) // Top-level categories with subcategories nested
+      setAllCategories(allCats) // Flattened list for dropdowns
       
     } else {
       console.error('❌ Failed to fetch categories, status:', response.status)
@@ -97,6 +122,27 @@ export default function AdminDashboard({ children }: AdminDashboardProps) {
     console.error('💥 Exception while fetching categories:', error)
   }
 }
+
+  // New function to fetch ALL categories (including subcategories) as a flat list
+  const fetchAllCategoriesFlat = async () => {
+    try {
+      console.log('🔍 Fetching all categories (flat list)...')
+      const response = await fetch('/api/categories/all?includePrivate=true')
+      
+      if (response.ok) {
+        const allCats = await response.json()
+        console.log('📦 All categories flat response:', allCats)
+        setAllCategories(allCats)
+      } else {
+        // Fallback: extract from nested structure
+        console.log('📦 Using fallback: extracting from nested structure')
+        // This is already handled in fetchCategories above
+      }
+    } catch (error) {
+      console.error('💥 Error fetching flat categories:', error)
+      // Fallback is already handled in fetchCategories
+    }
+  }
 
   const fetchStats = async () => {
     try {
@@ -209,13 +255,29 @@ export default function AdminDashboard({ children }: AdminDashboardProps) {
           <div className="space-y-8">
             <h2 className="text-3xl font-bold text-white mb-2">Upload Photos</h2>
             <p className="text-gray-400 mb-4">Add new photos to your portfolio</p>
-            <CloudinaryUpload categories={categories} onUploadComplete={refreshDashboardData} />
+            {/* Pass allCategories for flat dropdown selection */}
+            <CloudinaryUpload 
+              categories={allCategories} 
+              onUploadComplete={refreshDashboardData} 
+            />
           </div>
         )
       case 'images':
-        return <ImageManager categories={categories} refresh={refreshDashboardData} />
+        return (
+          <ImageManager 
+            categories={allCategories} 
+            refresh={refreshDashboardData} 
+          />
+        )
       case 'categories':
-        return <CategoryManager categories={categories} onUpdate={updateCategory} onDelete={deleteCategory} onCreate={createCategory} />
+        return (
+          <CategoryManager 
+            categories={allCategories}
+            onUpdate={updateCategory} 
+            onDelete={deleteCategory} 
+            onCreate={createCategory} 
+          />
+        )
       case 'settings':
         return <AdminImageSync refresh={refreshDashboardData} />
       default:

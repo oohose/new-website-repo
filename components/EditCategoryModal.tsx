@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Edit2, Trash2, Plus, X, Save, EyeOff, AlertTriangle, FolderOpen } from 'lucide-react'
+import { Edit2, Trash2, Plus, X, Save, EyeOff, AlertTriangle, FolderOpen, ChevronRight, ChevronDown } from 'lucide-react'
 import toast from 'react-hot-toast'
 import ModalWrapper from '@/components/ui/ModalWrapper'
 import { Category } from '@/lib/types'
@@ -373,6 +373,9 @@ function CategoryManager({
     isDeleting: false
   })
 
+  // Debug: Log what we're receiving
+  console.log('🎯 CategoryManager received categories:', categories.length, categories)
+
   const handleEdit = (category: Category) => {
     setEditModalState({
       isOpen: true,
@@ -434,7 +437,12 @@ function CategoryManager({
     <>
       <div className="bg-gray-800 rounded-lg p-6 space-y-6">
         <div className="flex items-center justify-between">
-          <h3 className="text-xl font-semibold text-white">Category Manager</h3>
+          <h3 className="text-xl font-semibold text-white">
+            Category Manager 
+            <span className="text-gray-400 text-sm font-normal ml-2">
+              ({categories.length} total)
+            </span>
+          </h3>
           <button
             onClick={handleCreate}
             className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
@@ -494,15 +502,23 @@ interface CategoryCardProps {
 }
 
 function CategoryCard({ category, onEdit, onDelete }: CategoryCardProps) {
+  const isSubcategory = !!category.parentId
+  
   return (
     <div className="bg-gray-700/50 rounded-lg border border-gray-600 hover:border-gray-500 transition-all duration-200">
       <div className="p-4">
         {/* Header Row - Title and Privacy */}
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center space-x-3 flex-1 min-w-0">
+            {/* Show if it's a subcategory */}
+            {isSubcategory && (
+              <div className="w-2 h-2 bg-blue-400 rounded-full flex-shrink-0"></div>
+            )}
+            
             <h3 className="text-white font-medium text-lg truncate">
-              {category.name}
+              {isSubcategory ? `└─ ${category.name}` : category.name}
             </h3>
+            
             {/* Private indicator next to title */}
             {category.isPrivate && (
               <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-500/20 text-red-300 border border-red-500/30 flex-shrink-0">
@@ -543,8 +559,13 @@ function CategoryCard({ category, onEdit, onDelete }: CategoryCardProps) {
             <div className="flex items-center space-x-4">
               <span>Key: <code className="text-xs bg-gray-800 px-1 py-0.5 rounded">{category.key}</code></span>
               <span>{category._count?.images || 0} images</span>
-              {category.subcategories && category.subcategories.length > 0 && (
-                <span>{category.subcategories.length} subcategories</span>
+              {/* Show parent info for subcategories */}
+              {isSubcategory && category.parent && (
+                <span className="text-blue-400">Parent: {category.parent.name}</span>
+              )}
+              {/* Show subcategory count for parent categories */}
+              {!isSubcategory && category._count?.subcategories && category._count.subcategories > 0 && (
+                <span className="text-green-400">{category._count.subcategories} subcategories</span>
               )}
             </div>
             <span className="text-xs">
@@ -553,6 +574,171 @@ function CategoryCard({ category, onEdit, onDelete }: CategoryCardProps) {
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+interface CategoryTreeItemProps {
+  category: Category
+  isExpanded: boolean
+  onToggleExpanded: () => void
+  onEdit: (category: Category) => void
+  onDelete: (category: Category) => void
+}
+
+function CategoryTreeItem({ 
+  category, 
+  isExpanded, 
+  onToggleExpanded, 
+  onEdit, 
+  onDelete
+}: CategoryTreeItemProps) {
+  const hasSubcategories = category.subcategories && category.subcategories.length > 0
+
+  return (
+    <div className="space-y-2">
+      {/* Main Category */}
+      <div className="bg-gray-700/50 rounded-lg border border-gray-600 hover:border-gray-500 transition-all duration-200">
+        <div className="p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3 flex-1 min-w-0">
+              {/* Expand/Collapse Button */}
+              {hasSubcategories ? (
+                <button
+                  onClick={onToggleExpanded}
+                  className="p-1 hover:bg-gray-600 rounded transition-colors"
+                >
+                  {isExpanded ? (
+                    <ChevronDown className="w-4 h-4 text-gray-400" />
+                  ) : (
+                    <ChevronRight className="w-4 h-4 text-gray-400" />
+                  )}
+                </button>
+              ) : (
+                <div className="w-6 h-6" /> // Spacer for alignment
+              )}
+              
+              {/* Category Name and Privacy */}
+              <div className="flex items-center space-x-2 flex-1 min-w-0">
+                <h3 className="text-white font-medium text-lg truncate">
+                  {category.name}
+                </h3>
+                {category.isPrivate && (
+                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-500/20 text-red-300 border border-red-500/30 flex-shrink-0">
+                    <EyeOff className="w-3 h-3 mr-1" />
+                    Private
+                  </span>
+                )}
+              </div>
+            </div>
+            
+            {/* Action Buttons */}
+            <div className="flex items-center space-x-2 flex-shrink-0">
+              <button
+                onClick={() => onEdit(category)}
+                className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-blue-300 bg-blue-600/20 border border-blue-500/30 rounded-md hover:bg-blue-600/30 hover:border-blue-500/50 transition-colors"
+              >
+                <Edit2 className="w-4 h-4 mr-1" />
+                Edit
+              </button>
+              <button
+                onClick={() => onDelete(category)}
+                className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-red-300 bg-red-600/20 border border-red-500/30 rounded-md hover:bg-red-600/30 hover:border-red-500/50 transition-colors"
+              >
+                <Trash2 className="w-4 h-4 mr-1" />
+                Delete
+              </button>
+            </div>
+          </div>
+
+          {/* Category Details */}
+          <div className="mt-3 space-y-2">
+            {category.description && (
+              <p className="text-gray-300 text-sm line-clamp-2">
+                {category.description}
+              </p>
+            )}
+            
+            <div className="flex items-center justify-between text-sm text-gray-400">
+              <div className="flex items-center space-x-4">
+                <span>Key: <code className="text-xs bg-gray-800 px-1 py-0.5 rounded">{category.key}</code></span>
+                <span>{category._count?.images || 0} images</span>
+                {hasSubcategories && (
+                  <span>{category.subcategories!.length} subcategories</span>
+                )}
+              </div>
+              <span className="text-xs">
+                {category.createdAt ? new Date(category.createdAt).toLocaleDateString() : 'Unknown date'}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Subcategories */}
+      {hasSubcategories && isExpanded && (
+        <div className="ml-6 space-y-2">
+          {category.subcategories!.map((subcategory) => (
+            <div key={subcategory.id} className="bg-gray-700/30 rounded-lg border border-gray-600/50 hover:border-gray-500/50 transition-all duration-200">
+              <div className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3 flex-1 min-w-0">
+                    <div className="w-6 h-6 flex items-center justify-center">
+                      <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
+                    </div>
+                    <div className="flex items-center space-x-2 flex-1 min-w-0">
+                      <h4 className="text-white font-medium truncate">
+                        {subcategory.name}
+                      </h4>
+                      {subcategory.isPrivate && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-500/20 text-red-300 border border-red-500/30 flex-shrink-0">
+                          <EyeOff className="w-3 h-3 mr-1" />
+                          Private
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center space-x-2 flex-shrink-0">
+                    <button
+                      onClick={() => onEdit(subcategory)}
+                      className="inline-flex items-center px-2 py-1 text-xs font-medium text-blue-300 bg-blue-600/20 border border-blue-500/30 rounded hover:bg-blue-600/30 hover:border-blue-500/50 transition-colors"
+                    >
+                      <Edit2 className="w-3 h-3 mr-1" />
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => onDelete(subcategory)}
+                      className="inline-flex items-center px-2 py-1 text-xs font-medium text-red-300 bg-red-600/20 border border-red-500/30 rounded hover:bg-red-600/30 hover:border-red-500/50 transition-colors"
+                    >
+                      <Trash2 className="w-3 h-3 mr-1" />
+                      Delete
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-2 space-y-1">
+                  {subcategory.description && (
+                    <p className="text-gray-400 text-sm line-clamp-1">
+                      {subcategory.description}
+                    </p>
+                  )}
+                  
+                  <div className="flex items-center justify-between text-xs text-gray-500">
+                    <div className="flex items-center space-x-3">
+                      <span>Key: <code className="text-xs bg-gray-800 px-1 py-0.5 rounded">{subcategory.key}</code></span>
+                      <span>{subcategory._count?.images || 0} images</span>
+                    </div>
+                    <span>
+                      {subcategory.createdAt ? new Date(subcategory.createdAt).toLocaleDateString() : 'Unknown date'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -655,7 +841,7 @@ function CategoryEditModal({ isOpen, onClose, category, categories, onSave }: Ca
   )
 
   return (
-    <ModalWrapper isOpen={isOpen} onClose={onClose} className="max-w-2xl max-h-[90vh] overflow-y-auto">
+    <ModalWrapper isOpen={isOpen} onClose={onClose}>
       <div className="flex items-center justify-between p-6 border-b border-gray-700">
         <h3 className="text-xl font-semibold text-white">
           {category ? 'Edit Category' : 'Create Category'}

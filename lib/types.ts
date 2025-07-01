@@ -3,11 +3,17 @@
 export interface Image {
   id: string
   title: string
+  description?: string | null
   cloudinaryId: string
   url: string
+  width?: number | null
+  height?: number | null
+  format?: string | null
+  bytes?: number | null
+  isHeader: boolean
+  order: number
   categoryId: string
   category?: Category
-  order: number
   createdAt: Date | string
   updatedAt: Date | string
 }
@@ -19,12 +25,23 @@ export interface Category {
   description: string | null
   isPrivate: boolean
   parentId: string | null
-  images: Image[]
+  parent?: {
+    id: string
+    name: string
+    key: string
+  } | Category | null
   subcategories: Category[]
-  parent?: Category | null
-  _count: { images: number }
+  images: Image[]
   createdAt?: Date | string
   updatedAt?: Date | string
+  socialLinks?: any
+  _count: { 
+    images: number
+    subcategories?: number
+  }
+  // New properties for better UX
+  displayName?: string // For showing indented names in dropdowns
+  isSubcategory?: boolean // Whether this is a subcategory
 }
 
 export interface UploadFile {

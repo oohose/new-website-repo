@@ -28,6 +28,169 @@ interface UploadComponentProps {
   onUploadComplete: () => void
 }
 
+// ENHANCED Category Picker Component that shows subcategories in tree view
+function CategoryPicker({ categories, selectedCategoryId, onCategorySelect }: CategoryPickerProps) {
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
+  
+  console.log('🔍 CategoryPicker received categories:', categories.length, categories)
+  
+  const toggleExpanded = (categoryId: string, event: React.MouseEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    
+    const newExpanded = new Set(expandedCategories)
+    if (newExpanded.has(categoryId)) {
+      newExpanded.delete(categoryId)
+    } else {
+      newExpanded.add(categoryId)
+    }
+    setExpandedCategories(newExpanded)
+  }
+
+  const handleCategoryClick = (categoryId: string, event: React.MouseEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    console.log('Category clicked:', categoryId)
+    onCategorySelect(categoryId)
+  }
+
+  // Render a single category with subcategories in tree style
+  const renderCategory = (category: Category, level = 0) => {
+    const isSelected = selectedCategoryId === category.id
+    const imageCount = category._count?.images || 0
+    const hasSubcategories = category.subcategories && category.subcategories.length > 0
+    const isExpanded = expandedCategories.has(category.id)
+
+    return (
+      <div key={category.id}>
+        {/* Main Category Row */}
+        <div
+          className={`flex items-center space-x-3 p-3 rounded-lg cursor-pointer transition-all duration-200 ${
+            isSelected 
+              ? 'bg-blue-600 text-white shadow-md' 
+              : 'hover:bg-gray-700 text-gray-300 hover:text-white'
+          }`}
+          style={{ minHeight: '48px' }}
+        >
+          {/* Expand/Collapse Button for Parent Categories */}
+          {hasSubcategories ? (
+            <button
+              onClick={(e) => toggleExpanded(category.id, e)}
+              className="flex-shrink-0 p-1 hover:bg-gray-600 rounded transition-colors"
+            >
+              {isExpanded ? (
+                <ChevronDown className="w-4 h-4" />
+              ) : (
+                <ChevronRight className="w-4 h-4" />
+              )}
+            </button>
+          ) : (
+            <div className="w-6 h-6 flex-shrink-0">
+              <Folder className="w-5 h-5" />
+            </div>
+          )}
+          
+          {/* Category Name - Clickable */}
+          <div 
+            className="flex-1 flex items-center space-x-2 min-w-0"
+            onClick={(e) => handleCategoryClick(category.id, e)}
+          >
+            <span className="text-sm font-medium truncate">
+              {category.name}
+            </span>
+            
+            {category.isPrivate && (
+              <EyeOff className="w-3 h-3 text-red-400 flex-shrink-0" />
+            )}
+          </div>
+          
+          <span className="text-xs text-gray-400 flex-shrink-0 min-w-[30px] text-right">
+            {imageCount}
+          </span>
+        </div>
+        
+        {/* Subcategories */}
+        {hasSubcategories && isExpanded && (
+          <div className="ml-6 mt-1 space-y-1">
+            {category.subcategories!.map(subcategory => {
+              const subSelected = selectedCategoryId === subcategory.id
+              const subImageCount = subcategory._count?.images || 0
+              
+              return (
+                <div
+                  key={subcategory.id}
+                  className={`flex items-center space-x-3 p-3 rounded-lg cursor-pointer transition-all duration-200 ${
+                    subSelected 
+                      ? 'bg-blue-600 text-white shadow-md' 
+                      : 'hover:bg-gray-700 text-gray-300 hover:text-white'
+                  }`}
+                  onClick={(e) => handleCategoryClick(subcategory.id, e)}
+                  style={{ minHeight: '48px' }}
+                >
+                  <div className="w-6 h-6 flex items-center justify-center flex-shrink-0">
+                    <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
+                  </div>
+                  
+                  <div className="flex-1 flex items-center space-x-2 min-w-0">
+                    <span className="text-sm font-medium truncate">
+                      {subcategory.name}
+                    </span>
+                    
+                    {subcategory.isPrivate && (
+                      <EyeOff className="w-3 h-3 text-red-400 flex-shrink-0" />
+                    )}
+                  </div>
+                  
+                  <span className="text-xs text-gray-400 flex-shrink-0 min-w-[30px] text-right">
+                    {subImageCount}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // Calculate total categories including subcategories
+  const totalCategoriesCount = categories.reduce((total, cat) => {
+    return total + 1 + (cat.subcategories?.length || 0)
+  }, 0)
+
+  return (
+    <div className="bg-gray-800 border border-gray-700 rounded-lg max-h-64 overflow-y-auto">
+      <div className="sticky top-0 bg-gray-800 border-b border-gray-700 p-4 z-10">
+        <h4 className="text-white font-medium">Select Category</h4>
+        <div className="text-xs text-gray-400 mt-1 space-y-1">
+          <p>Total available: {totalCategoriesCount} categories ({categories.length} top-level)</p>
+          {selectedCategoryId && (
+            <p className="text-blue-400">✓ Category selected</p>
+          )}
+          {categories.length === 0 && (
+            <p className="text-yellow-400">⚠️ No categories found - check Categories tab</p>
+          )}
+        </div>
+      </div>
+      
+      <div className="p-2 space-y-1">
+        {categories.length > 0 ? (
+          <>
+            {categories
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .map(category => renderCategory(category))}
+          </>
+        ) : (
+          <div className="p-4 text-center text-gray-400">
+            <p className="text-sm">No categories available</p>
+            <p className="text-xs mt-1">Create a category first in the Categories tab</p>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // Fixed image compression function for photography portfolio
 const compressImage = (file: File, targetSizeMB: number = 4.5): Promise<File> => {
   return new Promise((resolve, reject) => {
@@ -168,102 +331,6 @@ const compressImage = (file: File, targetSizeMB: number = 4.5): Promise<File> =>
       reject(urlError)
     }
   })
-}
-
-// FIXED Category Picker Component
-function CategoryPicker({ categories, selectedCategoryId, onCategorySelect }: CategoryPickerProps) {
-  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
-  
-  console.log('🔍 CategoryPicker received categories:', categories.length, categories)
-  
-  const toggleExpanded = (categoryId: string, event: React.MouseEvent) => {
-    event.preventDefault()
-    event.stopPropagation()
-    
-    const newExpanded = new Set(expandedCategories)
-    if (newExpanded.has(categoryId)) {
-      newExpanded.delete(categoryId)
-    } else {
-      newExpanded.add(categoryId)
-    }
-    setExpandedCategories(newExpanded)
-  }
-
-  const handleCategoryClick = (categoryId: string, event: React.MouseEvent) => {
-    event.preventDefault()
-    event.stopPropagation()
-    console.log('Category clicked:', categoryId)
-    onCategorySelect(categoryId)
-  }
-
-  // SIMPLIFIED category rendering - just show all categories in a flat list
-  const renderSimpleCategory = (category: Category) => {
-    const isSelected = selectedCategoryId === category.id
-    const imageCount = category._count?.images || 0
-
-    return (
-      <div
-        key={category.id}
-        className={`flex items-center space-x-3 p-3 rounded-lg cursor-pointer transition-all duration-200 ${
-          isSelected 
-            ? 'bg-blue-600 text-white shadow-md' 
-            : 'hover:bg-gray-700 text-gray-300 hover:text-white'
-        }`}
-        onClick={(e) => handleCategoryClick(category.id, e)}
-        style={{ minHeight: '48px' }}
-      >
-        <div className="flex-shrink-0">
-          <Folder className="w-5 h-5" />
-        </div>
-        
-        <span className="flex-1 text-sm font-medium truncate">
-          {category.name}
-        </span>
-        
-        {category.isPrivate && (
-          <div className="flex-shrink-0">
-            <EyeOff className="w-3 h-3 text-red-400" />
-          </div>
-        )}
-        
-        <span className="text-xs text-gray-400 flex-shrink-0 min-w-[30px] text-right">
-          {imageCount}
-        </span>
-      </div>
-    )
-  }
-
-  return (
-    <div className="bg-gray-800 border border-gray-700 rounded-lg max-h-64 overflow-y-auto">
-      <div className="sticky top-0 bg-gray-800 border-b border-gray-700 p-4 z-10">
-        <h4 className="text-white font-medium">Select Category</h4>
-        <div className="text-xs text-gray-400 mt-1 space-y-1">
-          <p>Total available: {categories.length} categories</p>
-          {selectedCategoryId && (
-            <p className="text-blue-400">✓ Category selected</p>
-          )}
-          {categories.length === 0 && (
-            <p className="text-yellow-400">⚠️ No categories found - check Categories tab</p>
-          )}
-        </div>
-      </div>
-      
-      <div className="p-2 space-y-1">
-        {categories.length > 0 ? (
-          <>
-            {categories
-              .sort((a, b) => a.name.localeCompare(b.name))
-              .map(category => renderSimpleCategory(category))}
-          </>
-        ) : (
-          <div className="p-4 text-center text-gray-400">
-            <p className="text-sm">No categories available</p>
-            <p className="text-xs mt-1">Create a category first in the Categories tab</p>
-          </div>
-        )}
-      </div>
-    </div>
-  )
 }
 
 // Main Upload Component
@@ -473,8 +540,6 @@ export default function UploadComponent({ categories, onUploadComplete }: Upload
         onUploadComplete()
       }
 
-      
-      
       if (errorCount > 0) {
         toast.error(`${errorCount} images failed to upload`)
       }
@@ -491,9 +556,31 @@ export default function UploadComponent({ categories, onUploadComplete }: Upload
     }
   }
 
-  const selectedCategory = categories.find(cat => cat.id === selectedCategoryId)
+  // Find selected category (could be parent or subcategory)
+  const findSelectedCategory = (): Category | null => {
+    for (const category of categories) {
+      if (category.id === selectedCategoryId) {
+        return category
+      }
+      if (category.subcategories) {
+        for (const subcategory of category.subcategories) {
+          if (subcategory.id === selectedCategoryId) {
+            return subcategory
+          }
+        }
+      }
+    }
+    return null
+  }
+
+  const selectedCategory = findSelectedCategory()
   const pendingFiles = files.filter(f => f.status === 'pending')
   const canUpload = pendingFiles.length > 0 && selectedCategoryId && !isUploading
+
+  // Calculate total categories including subcategories
+  const totalCategoriesCount = categories.reduce((total, cat) => {
+    return total + 1 + (cat.subcategories?.length || 0)
+  }, 0)
 
   return (
     <div className="space-y-6">
@@ -501,8 +588,12 @@ export default function UploadComponent({ categories, onUploadComplete }: Upload
       <div className="bg-red-900/20 border border-red-700 rounded-lg p-4">
         <h4 className="text-red-400 font-medium mb-2">Debug Info</h4>
         <div className="text-sm space-y-1">
-          <p className="text-gray-300">Categories received: <span className="text-white">{categories.length}</span></p>
+          <p className="text-gray-300">Top-level categories: <span className="text-white">{categories.length}</span></p>
+          <p className="text-gray-300">Total categories (with subcategories): <span className="text-white">{totalCategoriesCount}</span></p>
           <p className="text-gray-300">Selected category ID: <span className="text-white">{selectedCategoryId || 'none'}</span></p>
+          {selectedCategory && (
+            <p className="text-gray-300">Selected: <span className="text-white">{selectedCategory.name}</span></p>
+          )}
           {categories.length > 0 && (
             <details className="mt-2">
               <summary className="text-blue-400 cursor-pointer text-xs">View Raw Categories</summary>
