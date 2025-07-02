@@ -50,6 +50,8 @@ export default function RootLayout({
         <Providers>
           <ModernNavigation /> {/* ✅ Add the navigation here */}
           {children}
+          <Analytics />
+          {/* ✅ Add the Toaster component for notifications */}
           <Toaster
             position="top-center"
             toastOptions={{
