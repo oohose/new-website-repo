@@ -6,6 +6,7 @@ import { Toaster } from 'react-hot-toast'
 import { siteConfig } from '@/config/site'
 import ModernNavigation from '@/components/Navigation' // ✅ Add this import
 import { Analytics } from "@vercel/analytics/react"
+import { SpeedInsights } from '@vercel/speed-insights/react'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -75,6 +76,7 @@ export default function RootLayout({
           />
         </Providers>
         <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   )
