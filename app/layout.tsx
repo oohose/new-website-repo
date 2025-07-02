@@ -5,7 +5,7 @@ import { Providers } from '@/app/providers'
 import { Toaster } from 'react-hot-toast'
 import { siteConfig } from '@/config/site'
 import ModernNavigation from '@/components/Navigation' // ✅ Add this import
-import { Analytics } from "@vercel/analytics/next"
+import { Analytics } from "@vercel/analytics/react"
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -50,8 +50,6 @@ export default function RootLayout({
         <Providers>
           <ModernNavigation /> {/* ✅ Add the navigation here */}
           {children}
-          <Analytics />
-          {/* ✅ Add the Toaster component for notifications */}
           <Toaster
             position="top-center"
             toastOptions={{
@@ -76,6 +74,7 @@ export default function RootLayout({
             }}
           />
         </Providers>
+        <Analytics />
       </body>
     </html>
   )
