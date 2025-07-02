@@ -5,6 +5,7 @@ import { Providers } from '@/app/providers'
 import { Toaster } from 'react-hot-toast'
 import { siteConfig } from '@/config/site'
 import ModernNavigation from '@/components/Navigation' // ✅ Add this import
+import { Analytics } from "@vercel/analytics/next"
 
 const inter = Inter({ subsets: ['latin'] })
 
