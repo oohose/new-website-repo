@@ -29,15 +29,10 @@ interface ImageManagerProps {
   refresh?: () => Promise<void>
 }
 
-interface ImageWithCategory extends ImageType {
-  category: Category
-  description?: string | null
-  isHeader?: boolean
-  displayOrder?: number | null
-  width?: number
-  height?: number
-  format?: string
-  bytes?: number
+interface ImageWithCategory extends Omit<ImageType, 'isHeader' | 'category'> {
+  category: Category  // Make category required instead of optional
+  isHeader?: boolean  // Make isHeader optional
+  displayOrder?: number | null  // Add displayOrder (since base type has 'order')
 }
 
 function ImageEditModal({ image, onClose, onSave, isSaving }: {
