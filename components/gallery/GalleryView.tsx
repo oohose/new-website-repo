@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Image from 'next/image'
 import Link from 'next/link'
-import { ArrowLeft, X, ChevronLeft, ChevronRight, Edit, ExternalLink, Lock } from 'lucide-react'
+import { ArrowLeft, X, ChevronLeft, ChevronRight, Edit, ExternalLink, Lock, Play, Pause } from 'lucide-react'
 import EditCategoryModal from '@/components/EditCategoryModal'
 import { Category, Image as ImageType } from '@/lib/types'
 
@@ -24,6 +24,378 @@ interface SocialMediaLinksProps {
     website?: string
   }
   className?: string
+}
+
+function SimpleVideoPlayer({ src, poster, autoStart = false, videoDuration }: { src: string, poster?: string, autoStart?: boolean, videoDuration?: number }) {
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(videoDuration || 0) // Use provided duration from Cloudinary
+  const [volume, setVolume] = useState(1)
+  const [isMuted, setIsMuted] = useState(false)
+  const [showPoster, setShowPoster] = useState(true)
+  const [isLoading, setIsLoading] = useState(true)
+  const videoRef = useRef<HTMLVideoElement>(null)
+
+  // Fixed 16:9 dimensions
+  const playerWidth = Math.min(window.innerWidth * 0.85, 1200)
+  const playerHeight = Math.round(playerWidth * (9/16))
+
+  // Simple format time function
+  const formatTime = (time: number) => {
+    if (!time || isNaN(time)) return '0:00'
+    const minutes = Math.floor(time / 60)
+    const seconds = Math.floor(time % 60)
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`
+  }
+
+  // Simple progress calculation
+  const progressPercent = duration > 0 ? Math.min((currentTime / duration) * 100, 100) : 0
+
+  // Event handlers - simplified since we have duration from Cloudinary
+  const handleVideoReady = () => {
+    setIsLoading(false)
+    console.log('✅ Video ready, using Cloudinary duration:', duration)
+    
+    // Only try to get duration from video if we don't have it from Cloudinary
+    if (!duration && videoRef.current?.duration) {
+      setDuration(videoRef.current.duration)
+      console.log('📺 Fallback: Got duration from video element:', videoRef.current.duration)
+    }
+  }
+
+  // Simplified duration detection - less aggressive since we have it from Cloudinary
+  const tryGetDuration = () => {
+    if (!duration && videoRef.current?.duration) {
+      setDuration(videoRef.current.duration)
+      console.log('🔧 Duration captured from video element:', videoRef.current.duration)
+    }
+  }
+
+  const handleTimeUpdate = () => {
+    if (videoRef.current) {
+      setCurrentTime(videoRef.current.currentTime)
+      // Try to grab duration on every time update if we don't have it
+      tryGetDuration()
+    }
+  }
+
+  const handlePlay = () => {
+    setIsPlaying(true)
+    setShowPoster(false)
+    // Try to get duration when play starts
+    tryGetDuration()
+  }
+
+  const handlePause = () => {
+    setIsPlaying(false)
+  }
+
+  const togglePlay = async (e?: React.MouseEvent) => {
+    e?.preventDefault()
+    e?.stopPropagation()
+    if (videoRef.current) {
+      try {
+        if (isPlaying) {
+          videoRef.current.pause()
+        } else {
+          await videoRef.current.play()
+        }
+      } catch (error) {
+        console.error('Play error:', error)
+      }
+    }
+  }
+
+  // Handle spacebar for play/pause
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.code === 'Space' && !showPoster && !isLoading) {
+      e.preventDefault()
+      e.stopPropagation()
+      togglePlay()
+    }
+  }, [isPlaying, showPoster, isLoading])
+
+  // Add spacebar listener when video is active
+  useEffect(() => {
+    if (!showPoster && !isLoading) {
+      window.addEventListener('keydown', handleKeyDown)
+      return () => window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [handleKeyDown, showPoster, isLoading])
+
+  const handleProgressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    e.stopPropagation()
+    if (videoRef.current && duration > 0) {
+      const newTime = (parseFloat(e.target.value) / 100) * duration
+      videoRef.current.currentTime = newTime
+      setCurrentTime(newTime)
+    }
+  }
+
+  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    e.stopPropagation()
+    const newVolume = parseFloat(e.target.value) / 100
+    if (videoRef.current) {
+      videoRef.current.volume = newVolume
+      videoRef.current.muted = newVolume === 0
+      setVolume(newVolume)
+      setIsMuted(newVolume === 0)
+    }
+  }
+
+  const toggleMute = (e?: React.MouseEvent) => {
+    e?.stopPropagation()
+    if (videoRef.current) {
+      if (isMuted) {
+        videoRef.current.volume = volume
+        videoRef.current.muted = false
+        setIsMuted(false)
+      } else {
+        videoRef.current.volume = 0
+        videoRef.current.muted = true
+        setIsMuted(true)
+      }
+    }
+  }
+
+  const handlePosterClick = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setShowPoster(false)
+    if (videoRef.current) {
+      try {
+        await videoRef.current.play()
+      } catch (error) {
+        console.error('Play error:', error)
+        setShowPoster(true)
+      }
+    }
+  }
+
+  // Auto-start effect - simplified
+  useEffect(() => {
+    if (autoStart && !isLoading && videoRef.current) {
+      const startVideo = async () => {
+        try {
+          setShowPoster(false)
+          await videoRef.current?.play()
+        } catch (error) {
+          console.error('Auto-start failed:', error)
+        }
+      }
+      setTimeout(startVideo, 300)
+    }
+  }, [autoStart, isLoading])
+
+  // Remove aggressive duration monitoring since we have it from Cloudinary
+  useEffect(() => {
+    // Set loading to false immediately if we have duration from Cloudinary
+    if (videoDuration && videoDuration > 0) {
+      setIsLoading(false)
+    }
+  }, [videoDuration])
+
+  // Initial setup when video loads
+  useEffect(() => {
+    if (videoRef.current && !duration) {
+      // Only try to get duration if we don't have it from Cloudinary
+      setTimeout(tryGetDuration, 200)
+    }
+  }, [src])
+
+  return (
+    <div 
+      className="relative group bg-black rounded-lg overflow-hidden"
+      style={{
+        width: playerWidth,
+        height: playerHeight,
+        aspectRatio: '16 / 9'
+      }}
+    >
+      {/* Video Element - YouTube-style invisible clickable area */}
+      <video
+        ref={videoRef}
+        src={src}
+        poster={poster}
+        className="absolute inset-0 w-full h-full object-contain bg-black"
+        style={{
+          opacity: showPoster ? 0 : 1,
+          transition: 'opacity 0.3s ease',
+          cursor: 'default' // No pointer cursor - invisible clickable like YouTube
+        }}
+        onClick={!showPoster ? togglePlay : undefined}
+        onLoadedMetadata={handleVideoReady}
+        onLoadedData={handleVideoReady}
+        onCanPlay={handleVideoReady}
+        onDurationChange={handleVideoReady}
+        onTimeUpdate={handleTimeUpdate}
+        onPlay={handlePlay}
+        onPause={handlePause}
+        onEnded={() => setIsPlaying(false)}
+        preload="metadata"
+        controls={false}
+        playsInline
+        muted={false}
+      />
+
+      {/* Simple Loading Overlay */}
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/95 z-20">
+          {poster && (
+            <img
+              src={poster}
+              alt=""
+              className="absolute inset-0 w-full h-full object-cover opacity-20"
+            />
+          )}
+          <div className="relative z-10 flex flex-col items-center space-y-4 text-white">
+            <div className="w-16 h-16 border-4 border-white/20 border-t-[#338182] rounded-full animate-spin"></div>
+            <div className="text-lg font-medium">Loading video...</div>
+          </div>
+        </div>
+      )}
+
+      {/* Poster Overlay */}
+      {showPoster && !isLoading && (
+        <div 
+          className="absolute inset-0 cursor-pointer bg-black flex items-center justify-center z-10"
+          onClick={handlePosterClick}
+        >
+          {poster && (
+            <img
+              src={poster}
+              alt=""
+              className="absolute inset-0 w-full h-full object-cover"
+            />
+          )}
+          
+          <div className="absolute inset-0 bg-black/20" />
+          
+          {/* Play Button */}
+          <div className="relative z-10 flex items-center justify-center">
+            <div className="w-20 h-20 bg-[#338182] hover:bg-[#2a6a6b] rounded-full flex items-center justify-center transition-all hover:scale-105 shadow-2xl">
+              <svg className="w-8 h-8 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            </div>
+          </div>
+          
+          {/* Duration Badge */}
+          {duration > 0 && (
+            <div className="absolute bottom-4 right-4 bg-black/60 text-white px-2 py-1 rounded text-sm">
+              {formatTime(duration)}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Controls - PROPER BUTTONS that look soft */}
+      {!showPoster && !isLoading && (
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-4 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center space-x-3">
+            {/* Play/Pause - Proper button with soft styling */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                togglePlay(e)
+              }}
+              className="w-10 h-10 flex items-center justify-center text-white hover:bg-white/10 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-white/30"
+              aria-label={isPlaying ? 'Pause' : 'Play'}
+            >
+              {isPlaying ? (
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+              )}
+            </button>
+
+            {/* Current Time */}
+            <span className="text-white text-sm font-medium min-w-[40px]">
+              {formatTime(currentTime)}
+            </span>
+
+            {/* Progress Bar */}
+            <div className="flex-1 relative group/progress">
+              <div className="relative h-1 bg-white/30 rounded-full overflow-hidden hover:h-2 transition-all">
+                <div
+                  className="absolute top-0 left-0 h-full bg-[#338182] rounded-full transition-all"
+                  style={{ width: `${progressPercent}%` }}
+                />
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={progressPercent}
+                  onChange={handleProgressChange}
+                  onClick={(e) => e.stopPropagation()}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  aria-label="Video progress"
+                />
+                <div
+                  className="absolute top-1/2 w-3 h-3 bg-[#338182] border-2 border-white rounded-full transform -translate-y-1/2 transition-all opacity-0 group-hover/progress:opacity-100 shadow-lg"
+                  style={{ left: `calc(${progressPercent}% - 6px)` }}
+                />
+              </div>
+            </div>
+
+            {/* Duration */}
+            <span className="text-white text-sm font-medium min-w-[40px]">
+              {formatTime(duration)}
+            </span>
+
+            {/* Volume - Proper button with soft styling */}
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  toggleMute(e)
+                }}
+                className="text-white hover:text-gray-300 p-1 hover:bg-white/10 rounded transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-white/30"
+                aria-label={isMuted ? 'Unmute' : 'Mute'}
+              >
+                {isMuted || volume === 0 ? (
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10 3.414v13.172a.5.5 0 01-.854.353L5.5 13.5H3a1 1 0 01-1-1v-5a1 1 0 011-1h2.5l3.646-3.439A.5.5 0 0110 3.414z" />
+                    <path d="M13.293 6.293a1 1 0 011.414 1.414L16 9l-1.293 1.293a1 1 0 01-1.414-1.414L14.586 9l-1.293-1.293z" />
+                  </svg>
+                ) : (
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10 3.414v13.172a.5.5 0 01-.854.353L5.5 13.5H3a1 1 0 01-1-1v-5a1 1 0 011-1h2.5l3.646-3.439A.5.5 0 0110 3.414z" />
+                    <path d="M14.657 3.657a8 8 0 010 11.314L13.95 14.264a6.5 6.5 0 000-8.528l.707-.707z" />
+                    <path d="M12.828 5.828a4 4 0 010 5.656l-.707-.707a3 3 0 000-4.242l.707-.707z" />
+                  </svg>
+                )}
+              </button>
+
+              <div className="relative w-20 h-1 bg-white/20 rounded-full group/volume">
+                <div
+                  className="absolute top-0 left-0 h-full bg-white rounded-full transition-all"
+                  style={{ width: `${isMuted ? 0 : volume * 100}%` }}
+                />
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={isMuted ? 0 : volume * 100}
+                  onChange={handleVolumeChange}
+                  onClick={(e) => e.stopPropagation()}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  aria-label="Volume"
+                />
+                <div
+                  className="absolute top-1/2 w-3 h-3 bg-white border-2 border-[#338182] rounded-full transform -translate-y-1/2 transition-all opacity-0 group-hover/volume:opacity-100"
+                  style={{ left: `calc(${isMuted ? 0 : volume * 100}% - 6px)` }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 function SocialMediaLinks({ socialLinks, className = '' }: SocialMediaLinksProps) {
@@ -147,7 +519,7 @@ function SocialMediaLinks({ socialLinks, className = '' }: SocialMediaLinksProps
 }
 
 export default function DarkElegantGalleryView({ category, isAdmin, onRefresh }: DarkElegantGalleryViewProps) {
-  const [selectedImage, setSelectedImage] = useState<ImageType | null>(null)
+  const [selectedImage, setSelectedImage] = useState<any | null>(null)
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [editingCategory, setEditingCategory] = useState<Category | null>(null)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
@@ -155,30 +527,49 @@ export default function DarkElegantGalleryView({ category, isAdmin, onRefresh }:
   // Check if this is a private gallery being accessed by non-admin
   const isPrivateDirectAccess = category.isPrivate && !isAdmin
 
-  // FIXED: Simple Cloudinary URL function that doesn't crop
-  const getOptimizedUrl = (image: ImageType, width?: number, forLightbox = false) => {
-    if (!image.cloudinaryId) {
+  // Enhanced Cloudinary URL function that handles both images and videos
+  const getOptimizedUrl = (media: any, width?: number, forLightbox = false) => {
+    if (!media.cloudinaryId) {
       // Fallback to url property if available, or placeholder
-      return (image as any).url || '/placeholder-image.jpg'
+      return media.url || '/placeholder-image.jpg'
     }
     
     const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME
     if (!cloudName) {
-      return (image as any).url || '/placeholder-image.jpg'
+      return media.url || '/placeholder-image.jpg'
     }
 
-    // For lightbox - optimized size for faster loading
+    // Determine if this is a video
+    const isVideo = media.mediaType === 'video' || 
+                    media.format === 'mp4' || 
+                    ['mp4', 'mov', 'avi', 'webm', 'mkv'].includes(media.format?.toLowerCase() || '')
+
+    // For videos, use different transformations
+    if (isVideo) {
+      if (forLightbox) {
+        // For video lightbox, return the video URL directly
+        return `https://res.cloudinary.com/${cloudName}/video/upload/q_auto/${media.cloudinaryId}`
+      }
+      
+      if (width) {
+        // For video thumbnails in gallery
+        return `https://res.cloudinary.com/${cloudName}/video/upload/w_${width},so_1,f_jpg,q_auto/${media.cloudinaryId}`
+      }
+      
+      // Default video thumbnail
+      return `https://res.cloudinary.com/${cloudName}/video/upload/so_1,f_jpg,q_auto/${media.cloudinaryId}`
+    }
+
+    // For images (existing logic)
     if (forLightbox) {
-      return `https://res.cloudinary.com/${cloudName}/image/upload/w_1200,q_auto,f_auto/${image.cloudinaryId}`
+      return `https://res.cloudinary.com/${cloudName}/image/upload/w_1200,q_auto,f_auto/${media.cloudinaryId}`
     }
 
-    // For gallery - just resize width, maintain aspect ratio
     if (width) {
-      return `https://res.cloudinary.com/${cloudName}/image/upload/w_${width},q_auto,f_auto/${image.cloudinaryId}`
+      return `https://res.cloudinary.com/${cloudName}/image/upload/w_${width},q_auto,f_auto/${media.cloudinaryId}`
     }
 
-    // Default - original with quality optimization
-    return `https://res.cloudinary.com/${cloudName}/image/upload/q_auto,f_auto/${image.cloudinaryId}`
+    return `https://res.cloudinary.com/${cloudName}/image/upload/q_auto,f_auto/${media.cloudinaryId}`
   }
 
   // Generate gradient colors for subcategories (same as Portfolio.tsx)
@@ -200,15 +591,38 @@ export default function DarkElegantGalleryView({ category, isAdmin, onRefresh }:
   }
 
   const headerImage = category.images.find(img => (img as any).isHeader)
-  const galleryImages = category.images.filter(img => !(img as any).isHeader)
+  
+  // FIXED: Combine images and videos into one gallery array, removing duplicates
+  const allMedia = [
+    ...category.images.filter(img => !(img as any).isHeader).map(img => ({ ...img, mediaType: 'image' })),
+    ...(category.videos || []).map(vid => ({ ...vid, mediaType: 'video' }))
+  ]
+  
+  // Remove duplicates based on cloudinaryId and sort by order
+  const uniqueMedia = allMedia.filter((media, index, self) => 
+    index === self.findIndex((m) => m.cloudinaryId === media.cloudinaryId)
+  )
+  
+  const galleryMedia = uniqueMedia.sort((a, b) => (a.order || 0) - (b.order || 0))
+
+  console.log('🎬 GalleryView Debug:', {
+    categoryName: category.name,
+    totalImages: category.images.length,
+    totalVideos: category.videos?.length || 0,
+    allMediaBeforeDedup: allMedia.length,
+    uniqueMediaAfterDedup: uniqueMedia.length,
+    galleryMedia: galleryMedia.length,
+    duplicatesRemoved: allMedia.length - uniqueMedia.length,
+    mediaTypes: galleryMedia.map(m => ({ id: m.id, type: m.mediaType, format: m.format, cloudinaryId: m.cloudinaryId }))
+  })
 
   // Filter subcategories based on admin status
   const visibleSubcategories = category.subcategories?.filter(sub => 
     isAdmin || !sub.isPrivate
   ) || []
 
-  const openLightbox = (image: ImageType, index: number) => {
-    setSelectedImage(image)
+  const openLightbox = (media: any, index: number) => {
+    setSelectedImage(media)
     setCurrentImageIndex(index)
   }
 
@@ -217,14 +631,14 @@ export default function DarkElegantGalleryView({ category, isAdmin, onRefresh }:
   }
 
   const nextImage = () => {
-    const nextIndex = (currentImageIndex + 1) % galleryImages.length
-    setSelectedImage(galleryImages[nextIndex])
+    const nextIndex = (currentImageIndex + 1) % galleryMedia.length
+    setSelectedImage(galleryMedia[nextIndex])
     setCurrentImageIndex(nextIndex)
   }
 
   const previousImage = () => {
-    const prevIndex = currentImageIndex === 0 ? galleryImages.length - 1 : currentImageIndex - 1
-    setSelectedImage(galleryImages[prevIndex])
+    const prevIndex = currentImageIndex === 0 ? galleryMedia.length - 1 : currentImageIndex - 1
+    setSelectedImage(galleryMedia[prevIndex])
     setCurrentImageIndex(prevIndex)
   }
 
@@ -240,15 +654,28 @@ export default function DarkElegantGalleryView({ category, isAdmin, onRefresh }:
       await onRefresh()
     }
     
-    // Also invalidate Next.js cache
+    // Enhanced revalidation
     try {
-      await fetch('/api/revalidate', { method: 'POST' })
+      await fetch('/api/revalidate', { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          categoryKey: category.key,
+          action: 'edit',
+          force: true
+        })
+      })
     } catch (error) {
       console.error('Failed to revalidate cache:', error)
     }
     
     setIsEditModalOpen(false)
     setEditingCategory(null)
+    
+    // Wait a moment for revalidation, then reload
+    setTimeout(() => {
+      window.location.reload()
+    }, 500)
   }
 
   const handleCloseEdit = () => {
@@ -256,7 +683,79 @@ export default function DarkElegantGalleryView({ category, isAdmin, onRefresh }:
     setEditingCategory(null)
   }
 
-  // Keyboard navigation
+  // Listen for upload/delete events to auto-refresh the gallery
+  useEffect(() => {
+    const handleUploadSuccess = async (event: Event) => {
+      const customEvent = event as CustomEvent
+      console.log('🎉 Upload success detected, refreshing gallery...', customEvent.detail)
+      
+      // Call revalidation API
+      try {
+        await fetch('/api/revalidate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            categoryKey: category.key,
+            action: 'upload',
+            mediaType: customEvent.detail?.mediaType,
+            force: true
+          })
+        })
+      } catch (error) {
+        console.error('Revalidation failed:', error)
+      }
+
+      // Refresh the gallery data
+      if (onRefresh) {
+        await onRefresh()
+      }
+
+      // Reload the page after a short delay to ensure fresh content
+      setTimeout(() => {
+        window.location.reload()
+      }, 1000)
+    }
+
+    const handleDeleteSuccess = async (event: Event) => {
+      const customEvent = event as CustomEvent
+      console.log('🗑️ Delete success detected, refreshing gallery...', customEvent.detail)
+      
+      // Call revalidation API
+      try {
+        await fetch('/api/revalidate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            categoryKey: category.key,
+            action: 'delete',
+            mediaType: customEvent.detail?.mediaType,
+            force: true
+          })
+        })
+      } catch (error) {
+        console.error('Revalidation failed:', error)
+      }
+
+      // Refresh the gallery data
+      if (onRefresh) {
+        await onRefresh()
+      }
+
+      // Reload the page after a short delay to ensure fresh content
+      setTimeout(() => {
+        window.location.reload()
+      }, 1000)
+    }
+
+    // Listen for custom events
+    window.addEventListener('uploadSuccess', handleUploadSuccess)
+    window.addEventListener('deleteSuccess', handleDeleteSuccess)
+
+    return () => {
+      window.removeEventListener('uploadSuccess', handleUploadSuccess)
+      window.removeEventListener('deleteSuccess', handleDeleteSuccess)
+    }
+  }, [category.key, onRefresh])
   useEffect(() => {
     if (!selectedImage) return
 
@@ -278,24 +777,27 @@ export default function DarkElegantGalleryView({ category, isAdmin, onRefresh }:
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [selectedImage, currentImageIndex, galleryImages.length])
+  }, [selectedImage, currentImageIndex, galleryMedia.length])
 
-  // Preload adjacent images for instant navigation
+  // Preload adjacent media for instant navigation
   useEffect(() => {
-    if (!selectedImage || galleryImages.length <= 1) return
+    if (!selectedImage || galleryMedia.length <= 1) return
 
-    const preloadImage = (index: number) => {
-      const img = new window.Image()
-      img.src = getOptimizedUrl(galleryImages[index], 1200, true)
+    const preloadMedia = (index: number) => {
+      const media = galleryMedia[index]
+      if (media.mediaType === 'image') {
+        const img = new window.Image()
+        img.src = getOptimizedUrl(media, 1200, true)
+      }
     }
 
-    // Preload next and previous images
-    const nextIndex = (currentImageIndex + 1) % galleryImages.length
-    const prevIndex = currentImageIndex === 0 ? galleryImages.length - 1 : currentImageIndex - 1
+    // Preload next and previous media
+    const nextIndex = (currentImageIndex + 1) % galleryMedia.length
+    const prevIndex = currentImageIndex === 0 ? galleryMedia.length - 1 : currentImageIndex - 1
     
-    preloadImage(nextIndex)
-    preloadImage(prevIndex)
-  }, [selectedImage, currentImageIndex, galleryImages])
+    preloadMedia(nextIndex)
+    preloadMedia(prevIndex)
+  }, [selectedImage, currentImageIndex, galleryMedia])
 
   return (
     <>
@@ -360,7 +862,12 @@ export default function DarkElegantGalleryView({ category, isAdmin, onRefresh }:
             </div>
 
             {/* Main Content */}
-            <HeaderContent category={category} isAdmin={isAdmin} isPrivateDirectAccess={isPrivateDirectAccess} />
+            <HeaderContent 
+              category={category} 
+              isAdmin={isAdmin} 
+              isPrivateDirectAccess={isPrivateDirectAccess}
+              actualMediaCount={galleryMedia.length}
+            />
           </div>
 
           {/* Scroll Indicator */}
@@ -386,61 +893,68 @@ export default function DarkElegantGalleryView({ category, isAdmin, onRefresh }:
         {/* Gallery Section */}
         <div className="relative bg-gray-900 py-20">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            {galleryImages.length > 0 ? (
-              <>
-                {/* Section Header */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.8 }}
-                  viewport={{ once: true }}
-                  className="text-center mb-16"
-                >
-                  <h2 className="text-3xl md:text-4xl font-light text-white mb-4 tracking-tight">
-                    Gallery
-                  </h2>
-                  <div className="w-16 h-px bg-gradient-to-r from-transparent via-white/50 to-transparent mx-auto"></div>
-                </motion.div>
+            {galleryMedia.length > 0 ? (
+              <div className="columns-1 md:columns-2 lg:columns-3 xl:columns-4 gap-6">
+                {galleryMedia.map((media, index) => {
+                  const isVideo = media.mediaType === 'video' || 
+                                  media.format === 'mp4' || 
+                                  ['mp4', 'mov', 'avi', 'webm', 'mkv'].includes(media.format?.toLowerCase() || '')
 
-                {/* Image Grid - Masonry layout */}
-                <div className="columns-1 md:columns-2 lg:columns-3 xl:columns-4 gap-6">
-                  {galleryImages.map((image, index) => (
+                  return (
                     <motion.div
-                      key={image.id}
+                      key={`${media.mediaType}-${media.id}`}
                       initial={{ opacity: 0, y: 30 }}
                       whileInView={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.8, delay: index * 0.05 }}
                       viewport={{ once: true }}
                       className="group cursor-pointer break-inside-avoid mb-6"
-                      onClick={() => openLightbox(image, index)}
+                      onClick={() => openLightbox(media, index)}
                     >
                       <div className="relative overflow-hidden rounded-lg bg-gray-800 border border-gray-700/50">
                         <div className="relative">
-                          <img
-                            src={getOptimizedUrl(image, 400)}
-                            alt=""
-                            className="w-full h-auto transition-all duration-700 group-hover:scale-105 rounded-lg"
-                            loading="lazy"
-                          />
+                          {isVideo ? (
+                            // For videos, show thumbnail with play icon
+                            <div className="relative">
+                              <img
+                                src={getOptimizedUrl(media, 400)}
+                                alt={media.title || ''}
+                                className="w-full h-auto transition-all duration-700 group-hover:scale-105 rounded-lg"
+                                loading="lazy"
+                              />
+                              {/* Play icon overlay */}
+                              <div className="absolute inset-0 flex items-center justify-center">
+                                <div className="w-12 h-12 bg-black/70 rounded-full flex items-center justify-center group-hover:bg-black/80 transition-colors">
+                                  <Play className="w-6 h-6 text-white ml-1" />
+                                </div>
+                              </div>
+                              {/* Video indicator badge */}
+                              <div className="absolute top-2 right-2 px-2 py-1 bg-black/70 text-white text-xs rounded">
+                                VIDEO
+                              </div>
+                            </div>
+                          ) : (
+                            <img
+                              src={getOptimizedUrl(media, 400)}
+                              alt={media.title || ''}
+                              className="w-full h-auto transition-all duration-700 group-hover:scale-105 rounded-lg"
+                              loading="lazy"
+                            />
+                          )}
                         </div>
-                        
-                        {/* Simple hover overlay */}
                         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-500 rounded-lg" />
-                        
-                        {/* Hover Border Effect */}
                         <div className="absolute inset-0 border-2 border-transparent group-hover:border-white/20 transition-colors duration-500 rounded-lg" />
                       </div>
                     </motion.div>
-                  ))}
-                </div>
-              </>
+                  );
+                })}
+              </div>
             ) : (
               <div className="text-center py-20">
-                <h3 className="text-2xl text-white/70 mb-4 font-light">No Images Yet</h3>
+                <h3 className="text-2xl text-white/70 mb-4 font-light">No Media Yet</h3>
                 <p className="text-white/50">
                   {isAdmin
-                    ? "Upload some images to this category to get started!"
-                    : "Check back soon for new photos!"}
+                    ? 'Upload some images or videos to this category to get started!'
+                    : 'Check back soon for new content!'}
                 </p>
               </div>
             )}
@@ -573,7 +1087,7 @@ export default function DarkElegantGalleryView({ category, isAdmin, onRefresh }:
         />
       )}
 
-      {/* Lightbox Modal - Custom Full Screen Implementation */}
+      {/* Lightbox Modal - Enhanced for Videos with Fixed Navigation */}
       <AnimatePresence>
         {selectedImage && (
           <motion.div
@@ -593,11 +1107,35 @@ export default function DarkElegantGalleryView({ category, isAdmin, onRefresh }:
               </button>
 
               {/* Keyboard Navigation Hint */}
-              <div className="fixed top-4 left-4 md:top-6 md:left-6 z-20 text-white/60 text-xs md:text-sm bg-black/40 backdrop-blur-sm px-3 py-2 rounded-full border border-white/10">
+              <div className="fixed top-4 left-4 md:top-6 md:left-6 z-50 text-white/60 text-xs md:text-sm bg-black/40 backdrop-blur-sm px-3 py-2 rounded-full border border-white/10">
                 ← → to navigate • ESC to close
               </div>
 
-              {/* Image Container */}
+              {/* Navigation Buttons - ALWAYS OUTSIDE OF MEDIA */}
+              {galleryMedia.length > 1 && (
+                <>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      previousImage()
+                    }}
+                    className="fixed left-4 md:left-8 top-1/2 transform -translate-y-1/2 z-50 w-12 h-12 flex items-center justify-center bg-black/60 hover:bg-black/80 text-white/90 hover:text-white transition-all duration-200 rounded-full backdrop-blur-sm border border-white/20 hover:border-white/40 hover:scale-110"
+                  >
+                    <ChevronLeft className="w-6 h-6" />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      nextImage()
+                    }}
+                    className="fixed right-4 md:right-8 top-1/2 transform -translate-y-1/2 z-50 w-12 h-12 flex items-center justify-center bg-black/60 hover:bg-black/80 text-white/90 hover:text-white transition-all duration-200 rounded-full backdrop-blur-sm border border-white/20 hover:border-white/40 hover:scale-110"
+                  >
+                    <ChevronRight className="w-6 h-6" />
+                  </button>
+                </>
+              )}
+
+              {/* Media Container */}
               <motion.div
                 key={selectedImage.id}
                 initial={{ scale: 0.95, opacity: 0 }}
@@ -607,43 +1145,31 @@ export default function DarkElegantGalleryView({ category, isAdmin, onRefresh }:
                 className="relative flex items-center justify-center max-w-full max-h-full"
                 onClick={(e) => e.stopPropagation()}
               >
-                {/* Navigation Buttons - POSITIONED OUTSIDE IMAGE EDGES */}
-                {galleryImages.length > 1 && (
-                  <>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        previousImage()
-                      }}
-                      className="absolute -left-16 top-1/2 transform -translate-y-1/2 z-30 w-12 h-12 flex items-center justify-center bg-black/60 hover:bg-black/80 text-white/90 hover:text-white transition-all duration-200 rounded-full backdrop-blur-sm border border-white/20 hover:border-white/40 hover:scale-110"
-                    >
-                      <ChevronLeft className="w-6 h-6" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        nextImage()
-                      }}
-                      className="absolute -right-16 top-1/2 transform -translate-y-1/2 z-30 w-12 h-12 flex items-center justify-center bg-black/60 hover:bg-black/80 text-white/90 hover:text-white transition-all duration-200 rounded-full backdrop-blur-sm border border-white/20 hover:border-white/40 hover:scale-110"
-                    >
-                      <ChevronRight className="w-6 h-6" />
-                    </button>
-                  </>
+                {/* Display Video or Image */}
+                {selectedImage.mediaType === 'video' || 
+                 selectedImage.format === 'mp4' || 
+                 ['mp4', 'mov', 'avi', 'webm', 'mkv'].includes(selectedImage.format?.toLowerCase() || '') ? (
+                  <SimpleVideoPlayer 
+                    src={getOptimizedUrl(selectedImage, undefined, true)}
+                    poster={getOptimizedUrl(selectedImage, 800)}
+                    autoStart={true}
+                    videoDuration={selectedImage.duration} // Pass Cloudinary duration
+                  />
+                ) : (
+                  <img
+                    key={selectedImage.id}
+                    src={getOptimizedUrl(selectedImage, 1200, true)}
+                    alt={selectedImage.title || ''}
+                    className="max-w-full max-h-full object-contain rounded-lg"
+                    style={{ 
+                      maxWidth: '90vw', 
+                      maxHeight: '90vh',
+                      width: 'auto',
+                      height: 'auto'
+                    }}
+                    loading="eager"
+                  />
                 )}
-
-                <img
-                  key={selectedImage.id}
-                  src={getOptimizedUrl(selectedImage, 1200, true)}
-                  alt=""
-                  className="max-w-full max-h-full object-contain rounded-lg"
-                  style={{ 
-                    maxWidth: '90vw', 
-                    maxHeight: '90vh',
-                    width: 'auto',
-                    height: 'auto'
-                  }}
-                  loading="eager"
-                />
               </motion.div>
             </div>
           </motion.div>
@@ -654,10 +1180,11 @@ export default function DarkElegantGalleryView({ category, isAdmin, onRefresh }:
 }
 
 // Separate component for header content with social media integration
-function HeaderContent({ category, isAdmin, isPrivateDirectAccess }: { 
+function HeaderContent({ category, isAdmin, isPrivateDirectAccess, actualMediaCount }: { 
   category: Category, 
   isAdmin: boolean,
-  isPrivateDirectAccess: boolean 
+  isPrivateDirectAccess: boolean,
+  actualMediaCount?: number
 }) {
   return (
     <motion.div
@@ -711,9 +1238,9 @@ function HeaderContent({ category, isAdmin, isPrivateDirectAccess }: {
         transition={{ duration: 0.8, delay: 0.7 }}
         className="flex flex-col items-center justify-center space-y-4"
       >
-        {/* Image Count */}
+        {/* Media Count - Use actual displayed media count */}
         <span className="text-white/60 font-light tracking-wide">
-          {category._count.images} {category._count.images === 1 ? 'image' : 'images'} in this collection
+          {actualMediaCount || ((category._count?.images || 0) + (category._count?.videos || 0))} {(actualMediaCount || ((category._count?.images || 0) + (category._count?.videos || 0))) === 1 ? 'item' : 'items'} in this collection
         </span>
         
         {/* Privacy Indicators */}

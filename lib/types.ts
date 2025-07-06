@@ -16,6 +16,7 @@ export interface Image {
   category?: Category
   createdAt: Date | string
   updatedAt: Date | string
+  resource_type?: 'image' | 'video'
 }
 
 export interface Video {

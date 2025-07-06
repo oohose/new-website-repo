@@ -53,7 +53,7 @@ export async function uploadToCloudinary(
 ): Promise<CloudinaryUploadResult> {
   
   const defaultImageOptions: UploadApiOptions = {
-    folder: 'portfolio',
+    // Remove default folder - let the caller specify the exact folder
     quality: 'auto:good',
     resource_type: 'image',
     transformation: [
@@ -67,7 +67,7 @@ export async function uploadToCloudinary(
   };
 
   const defaultVideoOptions: UploadApiOptions = {
-    folder: 'portfolio/videos',
+    // Remove default folder - let the caller specify the exact folder
     resource_type: 'video',
     quality: 'auto:good',
     // Generate thumbnail at 1 second mark
@@ -97,6 +97,7 @@ export async function uploadToCloudinary(
   const defaultOptions = mediaType === 'video' ? defaultVideoOptions : defaultImageOptions;
 
   // Merge options - the passed options will override defaults
+  // Make sure the folder from options takes precedence
   const finalOptions: UploadApiOptions = { 
     ...defaultOptions, 
     ...options 

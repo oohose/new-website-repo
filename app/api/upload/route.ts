@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { v2 as cloudinary } from 'cloudinary';
 import { db } from "@/lib/db";
+import { revalidatePath } from 'next/cache';
 
 export const runtime = "nodejs";
 export const maxDuration = 300; // 5 minutes for video uploads
@@ -307,6 +308,48 @@ export async function POST(req: NextRequest) {
 
     console.log(`✅ Saved ${mediaType} to database:`, savedMedia.id);
 
+    // 🚨 CACHE INVALIDATION - This is the key fix!
+    try {
+  console.log('🔄 Invalidating caches with comprehensive method...');
+  
+  // Import revalidation functions
+  const { revalidatePath, revalidateTag } = await import('next/cache');
+  
+  // STEP 1: Revalidate specific tags (this is the key missing piece!)
+  revalidateTag(`gallery-${category.key}`);
+  revalidateTag('media');
+  revalidateTag('categories');
+  revalidateTag('images');
+  revalidateTag('videos');
+  
+  // STEP 2: Revalidate specific gallery pages
+  revalidatePath(`/gallery/${category.key}`, 'page');
+  revalidatePath('/gallery/[key]', 'page'); // Dynamic route
+  
+  // STEP 3: Revalidate API routes
+  revalidatePath('/api/media');
+  revalidatePath('/api/categories');
+  
+  // STEP 4: Revalidate home page (portfolio section)
+  revalidatePath('/', 'page');
+  
+  // STEP 5: If this is a subcategory, also revalidate parent
+  if (category.parent) {
+    revalidateTag(`gallery-${category.parent.key}`);
+    revalidatePath(`/gallery/${category.parent.key}`, 'page');
+  }
+  
+  // STEP 6: Force a cache-busting timestamp for debugging
+  const timestamp = Date.now();
+  console.log('✅ Enhanced cache invalidation complete at:', new Date(timestamp).toISOString());
+  
+  // STEP 7: Optional delay to ensure cache clearing propagates
+  await new Promise(resolve => setTimeout(resolve, 200));
+  
+} catch (revalidateError) {
+  console.error('❌ Cache revalidation failed:', revalidateError);
+  // Don't fail the upload if cache revalidation fails
+}
     return NextResponse.json({
       success: true,
       message: `${mediaType.charAt(0).toUpperCase() + mediaType.slice(1)} uploaded successfully`,
@@ -317,6 +360,7 @@ export async function POST(req: NextRequest) {
         thumbnailUrl: thumbnailUrl,
         title,
         categoryId,
+        categoryKey: category.key, // Include category key for frontend
         width: uploadResponse.width,
         height: uploadResponse.height,
         duration: uploadResponse.duration,

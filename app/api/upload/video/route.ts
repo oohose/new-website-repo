@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { uploadVideoToCloudinary } from '@/lib/cloudinary';
 import { db } from "@/lib/db";
+import { revalidatePath } from 'next/cache';
 
 export const runtime = "nodejs";
 export const maxDuration = 300; // 5 minutes for video uploads
@@ -211,6 +212,30 @@ export async function POST(req: NextRequest) {
 
     console.log('✅ Saved video to database:', savedVideo.id);
 
+    // 🚨 CACHE INVALIDATION - This is the key fix!
+    try {
+      console.log('🔄 Invalidating caches...');
+      
+      // Revalidate the specific gallery page
+      revalidatePath(`/gallery/${category.key}`);
+      
+      // If this is a subcategory, also revalidate parent
+      if (category.parent) {
+        revalidatePath(`/gallery/${category.parent.key}`);
+      }
+      
+      // Revalidate the media API
+      revalidatePath('/api/media');
+      
+      // Revalidate home page (portfolio section)
+      revalidatePath('/');
+      
+      console.log('✅ Cache invalidation complete');
+    } catch (revalidateError) {
+      console.error('❌ Cache revalidation failed:', revalidateError);
+      // Don't fail the upload if cache revalidation fails
+    }
+
     return NextResponse.json({
       success: true,
       message: "Video uploaded successfully",
@@ -221,6 +246,7 @@ export async function POST(req: NextRequest) {
         thumbnailUrl: uploadResponse.thumbnail_url,
         title,
         categoryId,
+        categoryKey: category.key, // Include category key for frontend
         width: uploadResponse.width,
         height: uploadResponse.height,
         duration: uploadResponse.duration,
