@@ -1,4 +1,3 @@
-// prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
@@ -15,10 +14,10 @@ model User {
   emailVerified DateTime?
   image         String?
   role          Role      @default(USER)
-  accounts      Account[]
-  sessions      Session[]
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+  accounts      Account[]
+  sessions      Session[]
 }
 
 model Account {
@@ -27,15 +26,14 @@ model Account {
   type              String
   provider          String
   providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
+  refresh_token     String?
+  access_token      String?
   expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String? @db.Text
+  id_token          String?
   session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
 }
@@ -57,19 +55,19 @@ model VerificationToken {
 }
 
 model Category {
-  id             String     @id @default(cuid())
-  key            String     @unique
-  name           String
-  description    String?
-  isPrivate      Boolean    @default(false)
-  parentId       String?
-  parent         Category?  @relation("CategoryParent", fields: [parentId], references: [id])
-  subcategories  Category[] @relation("CategoryParent")
-  images         Image[]
-  videos         Video[]    // Add video relation
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
-  socialLinks Json?
+  id            String     @id @default(cuid())
+  key           String     @unique
+  name          String
+  description   String?
+  isPrivate     Boolean    @default(false)
+  parentId      String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  socialLinks   Json?
+  parent        Category?  @relation("CategoryParent", fields: [parentId], references: [id])
+  subcategories Category[] @relation("CategoryParent")
+  images        Image[]
+  videos        Video[]
 }
 
 model Image {
@@ -81,13 +79,13 @@ model Image {
   width        Int?
   height       Int?
   format       String?
-  bytes        Int?     // Keep existing column (file size in bytes)
-  isHeader     Boolean  @default(false) // Keep existing column
+  bytes        Int?
+  isHeader     Boolean  @default(false)
   order        Int      @default(0)
   categoryId   String
-  category     Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  category     Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 }
 
 model Video {
@@ -96,29 +94,29 @@ model Video {
   description  String?
   cloudinaryId String   @unique
   url          String
-  thumbnailUrl String?  // Auto-generated thumbnail from Cloudinary
+  thumbnailUrl String?
   width        Int?
   height       Int?
-  duration     Float?   // Duration in seconds
-  format       String?  // Video format (mp4, mov, etc.)
-  bytes        Int?     // File size in bytes
-  bitrate      Int?     // Video bitrate
-  frameRate    Float?   // Frames per second
+  duration     Float?
+  format       String?
+  bytes        Int?
+  bitrate      Int?
+  frameRate    Float?
   order        Int      @default(0)
   categoryId   String
-  category     Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  category     Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 }
 
 model ContactSubmission {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   name      String
   email     String
-  message   String   @db.Text
+  message   String
   eventType String?
   eventDate DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 }
 
 enum Role {
