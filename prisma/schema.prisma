@@ -66,6 +66,7 @@ model Category {
   parent         Category?  @relation("CategoryParent", fields: [parentId], references: [id])
   subcategories  Category[] @relation("CategoryParent")
   images         Image[]
+  videos         Video[]    // Add video relation
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
   socialLinks Json?
@@ -82,6 +83,27 @@ model Image {
   format       String?
   bytes        Int?     // Keep existing column (file size in bytes)
   isHeader     Boolean  @default(false) // Keep existing column
+  order        Int      @default(0)
+  categoryId   String
+  category     Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Video {
+  id           String   @id @default(cuid())
+  title        String
+  description  String?
+  cloudinaryId String   @unique
+  url          String
+  thumbnailUrl String?  // Auto-generated thumbnail from Cloudinary
+  width        Int?
+  height       Int?
+  duration     Float?   // Duration in seconds
+  format       String?  // Video format (mp4, mov, etc.)
+  bytes        Int?     // File size in bytes
+  bitrate      Int?     // Video bitrate
+  frameRate    Float?   // Frames per second
   order        Int      @default(0)
   categoryId   String
   category     Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)

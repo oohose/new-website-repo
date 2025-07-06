@@ -1,4 +1,4 @@
-// lib/types.ts - Shared type definitions to avoid conflicts
+// lib/types.ts - Shared type definitions with video support
 
 export interface Image {
   id: string
@@ -11,6 +11,27 @@ export interface Image {
   format?: string | null
   bytes?: number | null
   isHeader: boolean
+  order: number
+  categoryId: string
+  category?: Category
+  createdAt: Date | string
+  updatedAt: Date | string
+}
+
+export interface Video {
+  id: string
+  title: string
+  description?: string | null
+  cloudinaryId: string
+  url: string
+  thumbnailUrl?: string | null
+  width?: number | null
+  height?: number | null
+  duration?: number | null  // Duration in seconds
+  format?: string | null
+  bytes?: number | null
+  bitrate?: number | null
+  frameRate?: number | null
   order: number
   categoryId: string
   category?: Category
@@ -32,11 +53,13 @@ export interface Category {
   } | Category | null
   subcategories: Category[]
   images: Image[]
+  videos: Video[]  // Add videos array
   createdAt?: Date | string
   updatedAt?: Date | string
   socialLinks?: any
   _count: { 
     images: number
+    videos?: number  // Add video count
     subcategories?: number
   }
   // New properties for better UX
@@ -54,6 +77,9 @@ export interface UploadFile {
   title: string
   compressedFile?: File
   error?: string
+  mediaType: 'image' | 'video'  // Track whether it's image or video
+  duration?: number  // For videos
+  thumbnail?: string  // For video previews
 }
 
 export interface User {
@@ -63,4 +89,26 @@ export interface User {
   role: string
   createdAt: Date | string
   updatedAt: Date | string
+}
+
+// New interfaces for media handling
+export interface MediaFile extends UploadFile {
+  mediaType: 'image' | 'video'
+}
+
+export interface VideoCompressionResult {
+  file: File
+  originalSize: number
+  compressedSize: number
+  compressionRatio: number
+  wasCompressed: boolean
+  thumbnail?: string
+  duration?: number
+}
+
+export interface MediaCompressionOptions {
+  maxSizeMB: number
+  maxWidthOrHeight?: number
+  initialQuality?: number
+  mediaType: 'image' | 'video'
 }

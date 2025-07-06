@@ -1,4 +1,4 @@
-// ✅ Fixed AdminDashboard.tsx with proper subcategory handling
+// ✅ Updated AdminDashboard.tsx with video support
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -6,11 +6,12 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import {
-  BarChart3, Upload, FolderPlus, Image as ImageIcon, Settings, Eye
+  BarChart3, Upload, FolderPlus, Image as ImageIcon, Settings, Eye, Video as VideoIcon
 } from 'lucide-react'
 import { CategoryManager } from '@/components/admin/InlineEditComponents'
 import AdminImageSync from '@/components/admin/AdminImageSync'
 import ImageManager from '@/components/admin/ImageManager'
+import VideoManager from '@/components/admin/VideoManager'
 import CloudinaryUpload from '@/components/admin/CloudinaryUpload'
 import { Category } from '@/lib/types'
 
@@ -24,12 +25,13 @@ export default function AdminDashboard({ children }: AdminDashboardProps) {
   const [activeTab, setActiveTab] = useState('overview')
   const [stats, setStats] = useState({
     totalImages: 0,
+    totalVideos: 0,
     totalCategories: 0,
     totalViews: 0,
     storageUsed: '0 MB'
   })
   const [categories, setCategories] = useState<Category[]>([])
-  const [allCategories, setAllCategories] = useState<Category[]>([]) // All categories including subcategories
+  const [allCategories, setAllCategories] = useState<Category[]>([])
 
   useEffect(() => {
     if (status === 'loading') return
@@ -45,119 +47,120 @@ export default function AdminDashboard({ children }: AdminDashboardProps) {
   }, [session])
 
   const fetchCategories = async () => {
-  try {
-    console.log('🔍 Starting to fetch categories...')
-    const response = await fetch('/api/categories?includePrivate=true')
-    console.log('📡 Categories API response status:', response.status)
-    
-    if (response.ok) {
-      const data = await response.json()
-      console.log('📦 Raw API response data:', data)
-      
-      // FIX: Handle both response formats
-      let fetchedCategories = []
-      
-      if (Array.isArray(data)) {
-        // If the response is directly an array of categories
-        fetchedCategories = data
-        console.log('✅ API returned categories as direct array')
-      } else if (data.categories && Array.isArray(data.categories)) {
-        // If the response has a 'categories' property
-        fetchedCategories = data.categories
-        console.log('✅ API returned categories in categories property')
-      } else {
-        console.warn('⚠️ Unexpected API response format:', data)
-        fetchedCategories = []
-      }
-      
-      console.log('📊 Number of top-level categories processed:', fetchedCategories.length)
-      
-      // Extract all categories (including subcategories) for dropdown usage
-      const allCats: Category[] = []
-      
-      const addCategoriesRecursively = (cats: Category[], level = 0) => {
-        cats.forEach(cat => {
-          // Add the category with level info for display purposes
-          allCats.push({
-            ...cat,
-            displayName: '  '.repeat(level) + cat.name // Add indentation for subcategories
-          })
-          
-          // Add subcategories recursively
-          if (cat.subcategories && cat.subcategories.length > 0) {
-            addCategoriesRecursively(cat.subcategories, level + 1)
-          }
-        })
-      }
-      
-      addCategoriesRecursively(fetchedCategories)
-      
-      console.log('📊 Total categories (including subcategories):', allCats.length)
-      
-      if (fetchedCategories.length > 0) {
-        // Log each category for debugging
-        fetchedCategories.forEach((cat: Category, index: number) => {
-          console.log(`📁 Category ${index + 1}:`, {
-            id: cat.id,
-            name: cat.name,
-            key: cat.key,
-            isPrivate: cat.isPrivate,
-            parentId: cat.parentId,
-            subcategoriesCount: cat.subcategories?.length || 0,
-            _count: cat._count
-          })
-        })
-      }
-      
-      console.log('💾 Setting categories state to:', fetchedCategories)
-      setCategories(fetchedCategories) // Top-level categories with subcategories nested
-      setAllCategories(allCats) // Flattened list for dropdowns
-      
-    } else {
-      console.error('❌ Failed to fetch categories, status:', response.status)
-      const responseText = await response.text()
-      console.error('❌ Error response body:', responseText)
-    }
-  } catch (error: unknown) {
-    console.error('💥 Exception while fetching categories:', error)
-  }
-}
-
-  // New function to fetch ALL categories (including subcategories) as a flat list
-  const fetchAllCategoriesFlat = async () => {
     try {
-      console.log('🔍 Fetching all categories (flat list)...')
-      const response = await fetch('/api/categories/all?includePrivate=true')
+      console.log('🔍 Starting to fetch categories...')
+      const response = await fetch('/api/categories?includePrivate=true')
+      console.log('📡 Categories API response status:', response.status)
       
       if (response.ok) {
-        const allCats = await response.json()
-        console.log('📦 All categories flat response:', allCats)
+        const data = await response.json()
+        console.log('📦 Raw API response data:', data)
+        
+        let fetchedCategories = []
+        
+        if (Array.isArray(data)) {
+          fetchedCategories = data
+          console.log('✅ API returned categories as direct array')
+        } else if (data.categories && Array.isArray(data.categories)) {
+          fetchedCategories = data.categories
+          console.log('✅ API returned categories in categories property')
+        } else {
+          console.warn('⚠️ Unexpected API response format:', data)
+          fetchedCategories = []
+        }
+        
+        console.log('📊 Number of top-level categories processed:', fetchedCategories.length)
+        
+        // Extract all categories (including subcategories) for dropdown usage
+        const allCats: Category[] = []
+        
+        const addCategoriesRecursively = (cats: Category[], level = 0) => {
+          cats.forEach(cat => {
+            allCats.push({
+              ...cat,
+              displayName: '  '.repeat(level) + cat.name
+            })
+            
+            if (cat.subcategories && cat.subcategories.length > 0) {
+              addCategoriesRecursively(cat.subcategories, level + 1)
+            }
+          })
+        }
+        
+        addCategoriesRecursively(fetchedCategories)
+        
+        console.log('📊 Total categories (including subcategories):', allCats.length)
+        
+        if (fetchedCategories.length > 0) {
+          fetchedCategories.forEach((cat: Category, index: number) => {
+            console.log(`📁 Category ${index + 1}:`, {
+              id: cat.id,
+              name: cat.name,
+              key: cat.key,
+              isPrivate: cat.isPrivate,
+              parentId: cat.parentId,
+              subcategoriesCount: cat.subcategories?.length || 0,
+              _count: cat._count
+            })
+          })
+        }
+        
+        console.log('💾 Setting categories state to:', fetchedCategories)
+        setCategories(fetchedCategories)
         setAllCategories(allCats)
+        
       } else {
-        // Fallback: extract from nested structure
-        console.log('📦 Using fallback: extracting from nested structure')
-        // This is already handled in fetchCategories above
+        console.error('❌ Failed to fetch categories, status:', response.status)
+        const responseText = await response.text()
+        console.error('❌ Error response body:', responseText)
       }
-    } catch (error) {
-      console.error('💥 Error fetching flat categories:', error)
-      // Fallback is already handled in fetchCategories
+    } catch (error: unknown) {
+      console.error('💥 Exception while fetching categories:', error)
     }
   }
 
   const fetchStats = async () => {
     try {
-      const response = await fetch('/api/admin/stats')
-      if (response.ok) {
-        const data = await response.json()
-        setStats(data)
-      }
+      // Fetch both images and videos to calculate stats
+      const [imagesRes, videosRes, categoriesRes] = await Promise.all([
+        fetch('/api/images?includePrivate=true'),
+        fetch('/api/videos?includePrivate=true'),
+        fetch('/api/categories?includePrivate=true')
+      ])
+      
+      const [imagesData, videosData, categoriesData] = await Promise.all([
+        imagesRes.json(),
+        videosRes.json(),
+        categoriesRes.json()
+      ])
+      
+      const totalImages = imagesData.images?.length || 0
+      const totalVideos = videosData.videos?.length || 0
+      const totalCategories = Array.isArray(categoriesData) ? categoriesData.length : categoriesData.categories?.length || 0
+      
+      // Calculate storage used (basic calculation)
+      const totalImagesSize = imagesData.images?.reduce((total: number, img: any) => 
+        total + (img.bytes || 0), 0) || 0
+      const totalVideosSize = videosData.videos?.reduce((total: number, vid: any) => 
+        total + (vid.bytes || 0), 0) || 0
+      const totalSize = totalImagesSize + totalVideosSize
+      const storageMB = (totalSize / (1024 * 1024)).toFixed(1)
+      
+      setStats({
+        totalImages,
+        totalVideos,
+        totalCategories,
+        totalViews: 0, // This would come from analytics
+        storageUsed: `${storageMB} MB`
+      })
     } catch (error: unknown) {
       console.error('Failed to fetch stats:', error)
     }
   }
 
   const refreshDashboardData = async () => {
-    await Promise.all([fetchStats(), fetchCategories()])
+    await Promise.all([fetchCategories()])
+    await fetchStats() // Fetch stats after categories are loaded
   }
 
   const updateCategory = async (id: string, data: Partial<Category>) => {
@@ -219,8 +222,9 @@ export default function AdminDashboard({ children }: AdminDashboardProps) {
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: BarChart3 },
-    { id: 'upload', label: 'Upload Photos', icon: Upload },
+    { id: 'upload', label: 'Upload Media', icon: Upload },
     { id: 'images', label: 'Manage Images', icon: ImageIcon },
+    { id: 'videos', label: 'Manage Videos', icon: VideoIcon },
     { id: 'categories', label: 'Categories', icon: FolderPlus },
     { id: 'settings', label: 'Settings', icon: Settings },
   ]
@@ -232,20 +236,42 @@ export default function AdminDashboard({ children }: AdminDashboardProps) {
           <div className="space-y-8">
             <div>
               <h2 className="text-3xl font-bold text-white mb-2">Dashboard Overview</h2>
-              <p className="text-gray-400">Manage your photography portfolio</p>
+              <p className="text-gray-400">Manage your photography and videography portfolio</p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
               <StatCard title="Total Images" value={stats.totalImages} icon={ImageIcon} color="blue" />
+              <StatCard title="Total Videos" value={stats.totalVideos} icon={VideoIcon} color="purple" />
               <StatCard title="Categories" value={stats.totalCategories} icon={FolderPlus} color="green" />
-              <StatCard title="Total Views" value={stats.totalViews} icon={Eye} color="purple" />
-              <StatCard title="Storage Used" value={stats.storageUsed} icon={BarChart3} color="orange" />
+              <StatCard title="Total Views" value={stats.totalViews} icon={Eye} color="orange" />
+              <StatCard title="Storage Used" value={stats.storageUsed} icon={BarChart3} color="red" />
             </div>
             <div className="bg-gray-800 rounded-lg p-6">
               <h3 className="text-xl font-semibold text-white mb-4">Quick Actions</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <QuickActionButton icon={Upload} title="Upload Photos" description="Add new photos to your portfolio" onClick={() => setActiveTab('upload')} />
-                <QuickActionButton icon={FolderPlus} title="Create Category" description="Organize your work into categories" onClick={() => setActiveTab('categories')} />
-                <QuickActionButton icon={Settings} title="Site Settings" description="Update your site configuration" onClick={() => setActiveTab('settings')} />
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <QuickActionButton 
+                  icon={Upload} 
+                  title="Upload Media" 
+                  description="Add new photos and videos" 
+                  onClick={() => setActiveTab('upload')} 
+                />
+                <QuickActionButton 
+                  icon={ImageIcon} 
+                  title="Manage Images" 
+                  description="Edit and organize photos" 
+                  onClick={() => setActiveTab('images')} 
+                />
+                <QuickActionButton 
+                  icon={VideoIcon} 
+                  title="Manage Videos" 
+                  description="Edit and organize videos" 
+                  onClick={() => setActiveTab('videos')} 
+                />
+                <QuickActionButton 
+                  icon={FolderPlus} 
+                  title="Create Category" 
+                  description="Organize your work" 
+                  onClick={() => setActiveTab('categories')} 
+                />
               </div>
             </div>
           </div>
@@ -253,9 +279,8 @@ export default function AdminDashboard({ children }: AdminDashboardProps) {
       case 'upload':
         return (
           <div className="space-y-8">
-            <h2 className="text-3xl font-bold text-white mb-2">Upload Photos</h2>
-            <p className="text-gray-400 mb-4">Add new photos to your portfolio</p>
-            {/* Pass allCategories for flat dropdown selection */}
+            <h2 className="text-3xl font-bold text-white mb-2">Upload Media</h2>
+            <p className="text-gray-400 mb-4">Add new photos and videos to your portfolio</p>
             <CloudinaryUpload 
               categories={allCategories} 
               onUploadComplete={refreshDashboardData} 
@@ -265,6 +290,13 @@ export default function AdminDashboard({ children }: AdminDashboardProps) {
       case 'images':
         return (
           <ImageManager 
+            categories={allCategories} 
+            refresh={refreshDashboardData} 
+          />
+        )
+      case 'videos':
+        return (
+          <VideoManager 
             categories={allCategories} 
             refresh={refreshDashboardData} 
           />
@@ -297,7 +329,11 @@ export default function AdminDashboard({ children }: AdminDashboardProps) {
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${activeTab === tab.id ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-700'}`}
+                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
+                      activeTab === tab.id 
+                        ? 'bg-blue-600 text-white' 
+                        : 'text-gray-300 hover:bg-gray-700'
+                    }`}
                   >
                     <Icon className="w-5 h-5" />
                     <span>{tab.label}</span>
@@ -317,12 +353,18 @@ export default function AdminDashboard({ children }: AdminDashboardProps) {
   )
 }
 
-function StatCard({ title, value, icon: Icon, color }: { title: string; value: string | number; icon: any; color: 'blue' | 'green' | 'purple' | 'orange' }) {
+function StatCard({ title, value, icon: Icon, color }: { 
+  title: string; 
+  value: string | number; 
+  icon: any; 
+  color: 'blue' | 'green' | 'purple' | 'orange' | 'red' 
+}) {
   const colorClasses = {
     blue: 'bg-blue-500/20 text-blue-400',
     green: 'bg-green-500/20 text-green-400',
     purple: 'bg-purple-500/20 text-purple-400',
     orange: 'bg-orange-500/20 text-orange-400',
+    red: 'bg-red-500/20 text-red-400',
   }
   return (
     <div className="bg-gray-800 rounded-lg p-6 h-full">
@@ -339,9 +381,17 @@ function StatCard({ title, value, icon: Icon, color }: { title: string; value: s
   )
 }
 
-function QuickActionButton({ icon: Icon, title, description, onClick }: { icon: any; title: string; description: string; onClick: () => void }) {
+function QuickActionButton({ icon: Icon, title, description, onClick }: { 
+  icon: any; 
+  title: string; 
+  description: string; 
+  onClick: () => void 
+}) {
   return (
-    <button onClick={onClick} className="bg-gray-700 rounded-lg p-6 text-left hover:bg-gray-600 transition-colors h-full">
+    <button 
+      onClick={onClick} 
+      className="bg-gray-700 rounded-lg p-6 text-left hover:bg-gray-600 transition-colors h-full"
+    >
       <div className="flex items-center space-x-3 mb-3">
         <Icon className="w-6 h-6 text-blue-400" />
         <h4 className="font-semibold text-white">{title}</h4>

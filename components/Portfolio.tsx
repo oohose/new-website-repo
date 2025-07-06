@@ -5,18 +5,27 @@ import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useSession } from 'next-auth/react'
-import { Edit, Settings } from 'lucide-react'
+import { Edit, Settings, Play } from 'lucide-react'
 import { Category } from '@/lib/types'
 import { useAuthCache } from '@/lib/hooks/useAuthCache'
 import EditCategoryModal from '@/components/EditCategoryModal'
 
-// Client-safe thumbnail function
+// Client-safe thumbnail function for images
 function getClientThumbnailUrl(cloudinaryId: string, width: number, height: number): string {
   const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME
   if (!cloudName || !cloudinaryId) {
     return '/placeholder-image.jpg'
   }
   return `https://res.cloudinary.com/${cloudName}/image/upload/c_fill,w_${width},h_${height},q_auto,f_auto/${cloudinaryId}`
+}
+
+// Client-safe thumbnail function for videos
+function getClientVideoThumbnailUrl(cloudinaryId: string, width: number, height: number): string {
+  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME
+  if (!cloudName || !cloudinaryId) {
+    return '/placeholder-video.jpg'
+  }
+  return `https://res.cloudinary.com/${cloudName}/video/upload/c_fill,w_${width},h_${height},so_1,f_jpg,q_auto/${cloudinaryId}`
 }
 
 interface PortfolioProps {
@@ -52,8 +61,8 @@ export default function ModernPortfolio({ categories, onRefresh }: PortfolioProp
     setMounted(true)
     setCategoriesList(categories)
     
-    // Debug logging for categories
-    console.log('📊 Portfolio Categories Debug:', {
+    // Debug logging for categories with video support
+    console.log('📊 Portfolio Categories Debug (with videos):', {
       totalCategories: categories.length,
       privateCategories: categories.filter(cat => cat.isPrivate).length,
       publicCategories: categories.filter(cat => !cat.isPrivate).length,
@@ -63,7 +72,9 @@ export default function ModernPortfolio({ categories, onRefresh }: PortfolioProp
         name: cat.name,
         isPrivate: cat.isPrivate,
         parentId: cat.parentId,
-        imageCount: cat._count?.images || 0
+        imageCount: cat._count?.images || 0,
+        videoCount: cat._count?.videos || 0, // ✅ Added video count
+        totalMedia: (cat._count?.images || 0) + (cat._count?.videos || 0)
       }))
     })
   }, [categories])
@@ -130,7 +141,9 @@ export default function ModernPortfolio({ categories, onRefresh }: PortfolioProp
       topLevelCategories: topLevelCategories.map(cat => ({
         name: cat.name,
         isPrivate: cat.isPrivate,
-        shouldShow: isUserAdmin || !cat.isPrivate
+        shouldShow: isUserAdmin || !cat.isPrivate,
+        imageCount: cat._count?.images || 0,
+        videoCount: cat._count?.videos || 0 // ✅ Added video count to debug
       }))
     })
   }, [categoriesList, topLevelCategories, isUserAdmin])
@@ -155,31 +168,52 @@ export default function ModernPortfolio({ categories, onRefresh }: PortfolioProp
     return <div className="h-96 bg-gray-800 animate-pulse" />
   }
 
-  // Calculate total images for each category (including subcategories)
+  // ✅ FIXED: Calculate total media (images + videos) for each category
   const categoriesWithTotals = topLevelCategories.map(category => {
-    const subcategoryImages = category.subcategories?.reduce(
+    // Count subcategory media (images + videos)
+    const subcategoryMedia = category.subcategories?.reduce(
       (total, sub) => {
         if (isUserAdmin || !sub.isPrivate) {
-          return total + (sub._count?.images || 0)
+          const subImages = sub._count?.images || 0
+          const subVideos = sub._count?.videos || 0
+          return total + subImages + subVideos
         }
         return total
       },
       0
     ) || 0
     
-    const totalImages = (category._count?.images || 0) + subcategoryImages
+    // Count main category media (images + videos)
+    const categoryImages = category._count?.images || 0
+    const categoryVideos = category._count?.videos || 0
+    const totalMedia = categoryImages + categoryVideos + subcategoryMedia
 
-    // Get most recent image from the PARENT category itself
-    const categoryImages = category.images || []
-    const recentImage = categoryImages
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0]
+    // Get most recent media from the PARENT category itself (prefer images, then videos)
+    const categoryImagesList = category.images || []
+    const categoryVideosList = category.videos || []
+    
+    // Combine all media and sort by creation date
+    const allCategoryMedia = [
+      ...categoryImagesList.map(img => ({ ...img, mediaType: 'image' as const })),
+      ...categoryVideosList.map(vid => ({ ...vid, mediaType: 'video' as const }))
+    ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+
+    const recentMedia = allCategoryMedia[0]
+
+    console.log(`📊 Category ${category.name} totals:`, {
+      images: categoryImages,
+      videos: categoryVideos,
+      subcategoryMedia,
+      totalMedia,
+      recentMedia: recentMedia ? `${recentMedia.mediaType}: ${recentMedia.title}` : 'none'
+    })
 
     return {
       ...category,
-      totalImages,
-      recentImage
+      totalMedia, // ✅ Changed from totalImages to totalMedia
+      recentMedia // ✅ Changed from recentImage to recentMedia
     }
-  }).filter(cat => cat.totalImages > 0)
+  }).filter(cat => cat.totalMedia > 0) // ✅ Changed from totalImages to totalMedia
 
   return (
     <>
@@ -221,7 +255,7 @@ export default function ModernPortfolio({ categories, onRefresh }: PortfolioProp
             </div>
             <div className="w-16 h-px bg-gray-400 mx-auto mb-6"></div>
             <p className="text-base md:text-lg text-gray-300 max-w-2xl mx-auto leading-relaxed">
-              Explore my collection of photography.
+              Explore my collection of photography and videography.
             </p>
           </motion.div>
 
@@ -230,7 +264,7 @@ export default function ModernPortfolio({ categories, onRefresh }: PortfolioProp
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
               {categoriesWithTotals.map((category, index) => (
                 <ModernPortfolioCard
-                  key={`${category.id}-${category.totalImages}`} // ✅ Force re-render when image count changes
+                  key={`${category.id}-${category.totalMedia}`} // ✅ Force re-render when media count changes
                   category={category}
                   index={index}
                   isAdmin={isUserAdmin}
@@ -292,9 +326,9 @@ interface ModernPortfolioCardProps {
 function ModernPortfolioCard({ category, index, isAdmin, onEdit }: ModernPortfolioCardProps) {
   const [imageError, setImageError] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
-  const [currentImageIndex, setCurrentImageIndex] = useState(0)
-  const [hasShuffled, setHasShuffled] = useState(false) // ✅ Track if we've shuffled already
-  const [imagesPreloaded, setImagesPreloaded] = useState(false) // ✅ Track preload status
+  const [currentMediaIndex, setCurrentMediaIndex] = useState(0) // ✅ Changed from currentImageIndex
+  const [hasShuffled, setHasShuffled] = useState(false)
+  const [mediaPreloaded, setMediaPreloaded] = useState(false) // ✅ Changed from imagesPreloaded
 
   // Generate gradient colors based on category name
   const generateGradient = (name: string) => {
@@ -314,58 +348,82 @@ function ModernPortfolioCard({ category, index, isAdmin, onEdit }: ModernPortfol
     return gradients[hash % gradients.length]
   }
 
-  // Get all available images for shuffling (from category and subcategories)
-  const getAllImages = () => {
-    const categoryImages = category.images || []
-    const subcategoryImages = category.subcategories?.flatMap((sub: any) => 
-      (isAdmin || !sub.isPrivate) ? sub.images || [] : []
-    ) || []
+  // ✅ FIXED: Get all available media (images + videos) for shuffling
+  const getAllMedia = () => {
+    const categoryImages = (category.images || []).map((img: any) => ({ ...img, mediaType: 'image' }))
+    const categoryVideos = (category.videos || []).map((vid: any) => ({ ...vid, mediaType: 'video' }))
     
-    return [...categoryImages, ...subcategoryImages].filter((img: any) => img.cloudinaryId)
+    const subcategoryMedia = category.subcategories?.flatMap((sub: any) => {
+      if (isAdmin || !sub.isPrivate) {
+        const subImages = (sub.images || []).map((img: any) => ({ ...img, mediaType: 'image' }))
+        const subVideos = (sub.videos || []).map((vid: any) => ({ ...vid, mediaType: 'video' }))
+        return [...subImages, ...subVideos]
+      }
+      return []
+    }) || []
+    
+    const allMedia = [...categoryImages, ...categoryVideos, ...subcategoryMedia]
+      .filter((media: any) => media.cloudinaryId)
+    
+    console.log(`📊 ${category.name} media:`, {
+      images: categoryImages.length,
+      videos: categoryVideos.length,
+      subcategoryMedia: subcategoryMedia.length,
+      total: allMedia.length
+    })
+    
+    return allMedia
   }
 
-  const allImages = getAllImages()
-  const currentImage = allImages[currentImageIndex] || category.recentImage
+  const allMedia = getAllMedia()
+  const currentMedia = allMedia[currentMediaIndex] || category.recentMedia
 
-  // ✅ PRELOAD ALL IMAGES for smooth transitions
+  // ✅ PRELOAD ALL MEDIA for smooth transitions
   useEffect(() => {
-    if (allImages.length > 1 && !imagesPreloaded) {
-      const preloadPromises = allImages.map((img: any) => {
+    if (allMedia.length > 1 && !mediaPreloaded) {
+      const preloadPromises = allMedia.map((media: any) => {
         return new Promise((resolve, reject) => {
-          const image = new window.Image()
-          image.onload = resolve
-          image.onerror = reject
-          image.src = getClientThumbnailUrl(img.cloudinaryId, 600, 480)
+          const element = new window.Image()
+          element.onload = resolve
+          element.onerror = reject
+          
+          if (media.mediaType === 'video') {
+            // For videos, load the thumbnail
+            element.src = getClientVideoThumbnailUrl(media.cloudinaryId, 600, 480)
+          } else {
+            // For images, load normally
+            element.src = getClientThumbnailUrl(media.cloudinaryId, 600, 480)
+          }
         })
       })
 
       Promise.allSettled(preloadPromises).then(() => {
-        setImagesPreloaded(true)
-        console.log(`✅ Preloaded ${allImages.length} images for category: ${category.name}`)
+        setMediaPreloaded(true)
+        console.log(`✅ Preloaded ${allMedia.length} media items for category: ${category.name}`)
       })
     }
-  }, [allImages, category.name, imagesPreloaded])
+  }, [allMedia, category.name, mediaPreloaded])
 
   // ✅ FIXED: Single shuffle on hover that persists (only after preload)
   const handleMouseEnter = () => {
     setIsHovered(true)
     
-    // Only shuffle if we haven't shuffled yet AND there are multiple images AND images are preloaded
-    if (!hasShuffled && allImages.length > 1 && imagesPreloaded) {
+    // Only shuffle if we haven't shuffled yet AND there are multiple media items AND media is preloaded
+    if (!hasShuffled && allMedia.length > 1 && mediaPreloaded) {
       setHasShuffled(true)
       
-      // Pick a random image that's different from current
-      const availableIndices = allImages.map((_, index) => index).filter(index => index !== currentImageIndex)
+      // Pick a random media item that's different from current
+      const availableIndices = allMedia.map((_, index) => index).filter(index => index !== currentMediaIndex)
       if (availableIndices.length > 0) {
         const randomIndex = availableIndices[Math.floor(Math.random() * availableIndices.length)]
-        setCurrentImageIndex(randomIndex)
+        setCurrentMediaIndex(randomIndex)
       }
     }
   }
 
   const handleMouseLeave = () => {
     setIsHovered(false)
-    // ✅ Don't reset the image index - keep the shuffled image
+    // ✅ Don't reset the media index - keep the shuffled media
     // Reset shuffle state after a delay to allow re-shuffle on next hover
     setTimeout(() => {
       setHasShuffled(false)
@@ -405,45 +463,68 @@ function ModernPortfolioCard({ category, index, isAdmin, onEdit }: ModernPortfol
 
       <Link href={`/gallery/${category.key}`} className="block">
         <div className="relative aspect-[5/4] overflow-hidden bg-gray-700 mb-4 rounded-xl shadow-lg">
-          {/* Background Image with Shuffle Effect */}
+          {/* Background Media with Shuffle Effect */}
           <AnimatePresence mode="wait">
-            {currentImage && currentImage.cloudinaryId && !imageError ? (
+            {currentMedia && currentMedia.cloudinaryId && !imageError ? (
               <motion.div
-                key={`${currentImage.id}-${currentImageIndex}`}
-                initial={{ opacity: 0, scale: 1.05 }} // ✅ Reduced scale for smoother transition
+                key={`${currentMedia.id}-${currentMediaIndex}`}
+                initial={{ opacity: 0, scale: 1.05 }}
                 animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.98 }}   // ✅ Smaller exit scale for smoother transition
+                exit={{ opacity: 0, scale: 0.98 }}
                 transition={{ 
-                  duration: 0.4, // ✅ Faster transition for less jumpiness
-                  ease: "easeOut" // ✅ Better easing
+                  duration: 0.4,
+                  ease: "easeOut"
                 }}
                 className="absolute inset-0"
               >
-                <Image
-                  src={getClientThumbnailUrl(currentImage.cloudinaryId, 600, 480)}
-                  alt={category.name}
-                  fill
-                  className="object-cover transition-all duration-700 group-hover:scale-105"
-                  onError={() => setImageError(true)}
-                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                  priority={index < 3}
-                />
+                {currentMedia.mediaType === 'video' ? (
+                  // ✅ Video thumbnail with play indicator
+                  <div className="relative w-full h-full">
+                    <Image
+                      src={currentMedia.thumbnailUrl || getClientVideoThumbnailUrl(currentMedia.cloudinaryId, 600, 480)}
+                      alt={category.name}
+                      fill
+                      className="object-cover transition-all duration-700 group-hover:scale-105"
+                      onError={() => setImageError(true)}
+                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                      priority={index < 3}
+                    />
+                    {/* Video play indicator */}
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="w-12 h-12 bg-black/60 backdrop-blur-sm rounded-full flex items-center justify-center">
+                        <Play className="w-6 h-6 text-white ml-1" />
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  // ✅ Regular image
+                  <Image
+                    src={getClientThumbnailUrl(currentMedia.cloudinaryId, 600, 480)}
+                    alt={category.name}
+                    fill
+                    className="object-cover transition-all duration-700 group-hover:scale-105"
+                    onError={() => setImageError(true)}
+                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                    priority={index < 3}
+                  />
+                )}
               </motion.div>
             ) : (
               <div className={`w-full h-full bg-gradient-to-br ${gradientClass}`} />
             )}
           </AnimatePresence>
           
-          {/* Image Index Indicator (shows when hovering and multiple images available) */}
-          {isHovered && allImages.length > 1 && (
+          {/* Media Index Indicator (shows when hovering and multiple media available) */}
+          {isHovered && allMedia.length > 1 && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="absolute top-3 right-3 bg-black/60 backdrop-blur-sm text-white text-xs px-2 py-1 rounded-full"
+              className="absolute top-3 right-3 bg-black/60 backdrop-blur-sm text-white text-xs px-2 py-1 rounded-full flex items-center space-x-1"
             >
-              {currentImageIndex + 1} / {allImages.length}
-              {!imagesPreloaded && <span className="ml-1 animate-pulse">●</span>}
+              <span>{currentMediaIndex + 1} / {allMedia.length}</span>
+              {currentMedia?.mediaType === 'video' && <Play className="w-3 h-3" />}
+              {!mediaPreloaded && <span className="animate-pulse">●</span>}
             </motion.div>
           )}
           
@@ -490,11 +571,11 @@ function ModernPortfolioCard({ category, index, isAdmin, onEdit }: ModernPortfol
           >
             <div className="flex items-center justify-between text-white/80">
               <span className="text-sm">
-                {category.totalImages} {category.totalImages === 1 ? 'image' : 'images'}
+                {category.totalMedia} {category.totalMedia === 1 ? 'item' : 'items'}
               </span>
               <span className="text-sm">
-                {allImages.length > 1 ? 
-                  (imagesPreloaded ? 'Hover to preview →' : 'Loading preview...') : 
+                {allMedia.length > 1 ? 
+                  (mediaPreloaded ? 'Hover to preview →' : 'Loading preview...') : 
                   'Tap to view →'
                 }
               </span>

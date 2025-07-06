@@ -11,11 +11,15 @@ import {
   Folder,
   ChevronRight,
   ChevronDown,
-  EyeOff
+  EyeOff,
+  Image as ImageIcon,
+  Video as VideoIcon,
+  Play
 } from 'lucide-react'
 import Image from 'next/image'
 import toast from 'react-hot-toast'
 import { Category, UploadFile } from '@/lib/types'
+import { MediaCompressor } from '@/utils/mediaCompression'
 
 interface CategoryPickerProps {
   categories: Category[]
@@ -28,7 +32,7 @@ interface UploadComponentProps {
   onUploadComplete: () => void
 }
 
-// ENHANCED Category Picker Component that shows subcategories in tree view
+// Enhanced Category Picker Component
 function CategoryPicker({ categories, selectedCategoryId, onCategorySelect }: CategoryPickerProps) {
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
   
@@ -58,6 +62,7 @@ function CategoryPicker({ categories, selectedCategoryId, onCategorySelect }: Ca
   const renderCategory = (category: Category, level = 0) => {
     const isSelected = selectedCategoryId === category.id
     const imageCount = category._count?.images || 0
+    const videoCount = category._count?.videos || 0
     const hasSubcategories = category.subcategories && category.subcategories.length > 0
     const isExpanded = expandedCategories.has(category.id)
 
@@ -104,9 +109,21 @@ function CategoryPicker({ categories, selectedCategoryId, onCategorySelect }: Ca
             )}
           </div>
           
-          <span className="text-xs text-gray-400 flex-shrink-0 min-w-[30px] text-right">
-            {imageCount}
-          </span>
+          {/* Media counts */}
+          <div className="flex items-center space-x-2 text-xs text-gray-400 flex-shrink-0">
+            {imageCount > 0 && (
+              <div className="flex items-center space-x-1">
+                <ImageIcon className="w-3 h-3" />
+                <span>{imageCount}</span>
+              </div>
+            )}
+            {videoCount > 0 && (
+              <div className="flex items-center space-x-1">
+                <VideoIcon className="w-3 h-3" />
+                <span>{videoCount}</span>
+              </div>
+            )}
+          </div>
         </div>
         
         {/* Subcategories */}
@@ -115,6 +132,7 @@ function CategoryPicker({ categories, selectedCategoryId, onCategorySelect }: Ca
             {category.subcategories!.map(subcategory => {
               const subSelected = selectedCategoryId === subcategory.id
               const subImageCount = subcategory._count?.images || 0
+              const subVideoCount = subcategory._count?.videos || 0
               
               return (
                 <div
@@ -141,9 +159,21 @@ function CategoryPicker({ categories, selectedCategoryId, onCategorySelect }: Ca
                     )}
                   </div>
                   
-                  <span className="text-xs text-gray-400 flex-shrink-0 min-w-[30px] text-right">
-                    {subImageCount}
-                  </span>
+                  {/* Media counts for subcategories */}
+                  <div className="flex items-center space-x-2 text-xs text-gray-400 flex-shrink-0">
+                    {subImageCount > 0 && (
+                      <div className="flex items-center space-x-1">
+                        <ImageIcon className="w-3 h-3" />
+                        <span>{subImageCount}</span>
+                      </div>
+                    )}
+                    {subVideoCount > 0 && (
+                      <div className="flex items-center space-x-1">
+                        <VideoIcon className="w-3 h-3" />
+                        <span>{subVideoCount}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )
             })}
@@ -191,146 +221,21 @@ function CategoryPicker({ categories, selectedCategoryId, onCategorySelect }: Ca
   )
 }
 
-// Fixed image compression function for photography portfolio
-const compressImage = (file: File, targetSizeMB: number = 4.5): Promise<File> => {
-  return new Promise((resolve, reject) => {
-    // Early return if file is already small enough
-    if (file.size <= targetSizeMB * 1024 * 1024) {
-      console.log('✅ File already small enough, no compression needed')
-      resolve(file)
-      return
-    }
-
-    console.log(`🔄 Compressing ${file.name} from ${(file.size / 1024 / 1024).toFixed(2)}MB to target ${targetSizeMB}MB`)
-
-    const canvas = document.createElement('canvas')
-    const ctx = canvas.getContext('2d')
-    const img = new window.Image()
-    
-    const cleanup = () => {
-      URL.revokeObjectURL(img.src)
-    }
-
-    img.onload = () => {
-      try {
-        // More generous dimensions for photography - maintain higher resolution
-        const maxWidth = 2800  // Increased from 2000
-        const maxHeight = 2800 // Increased from 2000
-        let { width, height } = img
-        
-        // Only resize if significantly larger than max dimensions
-        if (width > height) {
-          if (width > maxWidth) {
-            height = (height * maxWidth) / width
-            width = maxWidth
-          }
-        } else {
-          if (height > maxHeight) {
-            width = (width * maxHeight) / height
-            height = maxHeight
-          }
-        }
-        
-        canvas.width = width
-        canvas.height = height
-        
-        if (ctx) {
-          ctx.imageSmoothingEnabled = true
-          ctx.imageSmoothingQuality = 'high'
-          ctx.drawImage(img, 0, 0, width, height)
-        } else {
-          cleanup()
-          reject(new Error('Could not get canvas context'))
-          return
-        }
-        
-        const targetSizeBytes = targetSizeMB * 1024 * 1024
-        let bestResult = file // Keep track of best result so far
-        let attempts = 0
-        const maxAttempts = 15
-        
-        const tryCompress = (quality: number) => {
-          attempts++
-          
-          if (attempts > maxAttempts) {
-            console.log(`⚠️ Max attempts reached. Using best result: ${(bestResult.size / 1024 / 1024).toFixed(2)}MB`)
-            cleanup()
-            resolve(bestResult)
-            return
-          }
-
-          canvas.toBlob((blob) => {
-            if (!blob) {
-              cleanup()
-              reject(new Error('Failed to create compressed blob'))
-              return
-            }
-
-            const compressedFile = new File([blob], file.name, {
-              type: 'image/jpeg',
-              lastModified: Date.now()
-            })
-            
-            const sizeMB = compressedFile.size / 1024 / 1024
-            console.log(`📊 Attempt ${attempts}: ${sizeMB.toFixed(2)}MB at quality ${quality.toFixed(2)}`)
-            
-            // Update best result if this is closer to target (but still under)
-            if (compressedFile.size <= targetSizeBytes) {
-              if (compressedFile.size > bestResult.size || bestResult.size > targetSizeBytes) {
-                bestResult = compressedFile
-              }
-            }
-            
-            // If we're very close to target size, use this result
-            const targetTolerance = targetSizeBytes * 0.1 // 10% tolerance
-            if (Math.abs(compressedFile.size - targetSizeBytes) <= targetTolerance) {
-              console.log(`✅ Target achieved: ${(file.size / 1024 / 1024).toFixed(2)}MB → ${sizeMB.toFixed(2)}MB`)
-              cleanup()
-              resolve(compressedFile)
-              return
-            }
-            
-            // If we're under target and quality is still reasonable, try higher quality
-            if (compressedFile.size < targetSizeBytes && quality < 0.95) {
-              const newQuality = Math.min(0.95, quality + 0.05)
-              tryCompress(newQuality)
-            }
-            // If we're over target, try lower quality
-            else if (compressedFile.size > targetSizeBytes && quality > 0.3) {
-              const newQuality = Math.max(0.3, quality - 0.05)
-              tryCompress(newQuality)
-            }
-            // If we can't get closer, use best result
-            else {
-              console.log(`✅ Compression complete: ${(file.size / 1024 / 1024).toFixed(2)}MB → ${(bestResult.size / 1024 / 1024).toFixed(2)}MB`)
-              cleanup()
-              resolve(bestResult)
-            }
-          }, 'image/jpeg', quality)
-        }
-        
-        // Start with a quality that should get us close to target
-        const initialQuality = 0.8
-        tryCompress(initialQuality)
-        
-      } catch (canvasError) {
-        cleanup()
-        reject(canvasError)
-      }
-    }
-    
-    img.onerror = () => {
-      cleanup()
-      reject(new Error('Failed to load image for compression'))
-    }
-    
-    try {
-      img.src = URL.createObjectURL(file)
-    } catch (urlError) {
-      cleanup()
-      reject(urlError)
-    }
-  })
+// Video preview component
+function VideoPreview({ src, className = "" }: { src: string; className?: string }) {
+  return (
+    <div className={`relative bg-gray-900 rounded overflow-hidden ${className}`}>
+      <video 
+        src={src} 
+        className="w-full h-full object-cover"
+        muted
+        preload="metadata"
+      />
+      <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+        <Play className="w-6 h-6 text-white" />
+      </div>
+    </div>
+  )
 }
 
 // Main Upload Component
@@ -349,6 +254,9 @@ export default function UploadComponent({ categories, onUploadComplete }: Upload
       if (file.preview) {
         URL.revokeObjectURL(file.preview)
       }
+      if (file.thumbnail) {
+        URL.revokeObjectURL(file.thumbnail)
+      }
     })
     setFiles([])
     
@@ -360,52 +268,46 @@ export default function UploadComponent({ categories, onUploadComplete }: Upload
   const handleFiles = useCallback(async (newFiles: FileList | File[]) => {
     const fileArray = Array.from(newFiles)
     const validFiles = fileArray.filter(file => {
-      if (!file.type.startsWith('image/')) {
-        toast.error(`${file.name} is not an image file`)
+      const fileType = file.type.toLowerCase();
+      const supportedTypes = [
+        'image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif',
+        'video/mp4', 'video/quicktime', 'video/mov', 'video/avi', 'video/webm', 'video/mkv'
+      ];
+      
+      if (!supportedTypes.includes(fileType)) {
+        toast.error(`${file.name} is not a supported file type`)
         return false
       }
       return true
     })
 
     const uploadFilesPromises = validFiles.map(async (file): Promise<UploadFile | null> => {
-      let processedFile = file
-      const originalFile = file
-      
-      if (file.size > 9 * 1024 * 1024) {
-        toast(`Compressing ${file.name}...`)
-        try {
-          processedFile = await compressImage(file, 4.5)
-          
-          const originalSizeMB = (file.size / 1024 / 1024).toFixed(1)
-          const compressedSizeMB = (processedFile.size / 1024 / 1024).toFixed(1)
-          
-          toast.success(`${file.name} compressed from ${originalSizeMB}MB to ${compressedSizeMB}MB`)
-          
-          console.log(`Compression result:`, {
-            original: `${originalSizeMB}MB`,
-            compressed: `${compressedSizeMB}MB`,
-            fileName: file.name
-          })
-          
-        } catch (error) {
-          console.error('Compression failed:', error)
-          toast.error(`Failed to compress ${file.name}`)
-          return null
+      try {
+        const mediaType = file.type.startsWith('image/') ? 'image' : 'video'
+        
+        // For now, skip compression and just create the upload file object
+        // You can add back compression later once the basic upload works
+        
+        // Create preview
+        const preview = URL.createObjectURL(file)
+        
+        return {
+          id: Math.random().toString(36),
+          file: file, // Use original file for now
+          originalFile: file,
+          preview,
+          status: 'pending' as const,
+          progress: 0,
+          title: file.name.replace(/\.[^/.]+$/, ''),
+          mediaType,
+          duration: undefined, // Will be processed by Cloudinary
+          thumbnail: undefined
         }
-      } else {
-        const sizeMB = (file.size / 1024 / 1024).toFixed(1)
-        console.log(`File ${file.name}: ${sizeMB}MB - no compression needed`)
-      }
-
-      return {
-        id: Math.random().toString(36),
-        file: processedFile,
-        originalFile: originalFile,
-        preview: URL.createObjectURL(originalFile),
-        status: 'pending' as const,
-        progress: 0,
-        title: file.name.replace(/\.[^/.]+$/, ''),
-        compressedFile: processedFile !== originalFile ? processedFile : undefined
+        
+      } catch (error) {
+        console.error('File processing failed:', error)
+        toast.error(`Failed to process ${file.name}`)
+        return null
       }
     })
 
@@ -441,6 +343,9 @@ export default function UploadComponent({ categories, onUploadComplete }: Upload
       const fileToRemove = prev.find(f => f.id === fileId)
       if (fileToRemove?.preview) {
         URL.revokeObjectURL(fileToRemove.preview)
+      }
+      if (fileToRemove?.thumbnail) {
+        URL.revokeObjectURL(fileToRemove.thumbnail)
       }
       return prev.filter(f => f.id !== fileId)
     })
@@ -481,12 +386,12 @@ export default function UploadComponent({ categories, onUploadComplete }: Upload
 
         try {
           const formData = new FormData()
-          const fileToUpload = uploadFile.compressedFile || uploadFile.file
+          const fileToUpload = uploadFile.file // Use original file since we're not compressing yet
           formData.append('file', fileToUpload)
           formData.append('title', uploadFile.title)
           formData.append('categoryId', selectedCategoryId)
 
-          console.log(`📤 Uploading ${uploadFile.title} (${(fileToUpload.size / 1024 / 1024).toFixed(2)}MB)`)
+          console.log(`📤 Uploading ${uploadFile.mediaType}: ${uploadFile.title} (${(fileToUpload.size / 1024 / 1024).toFixed(2)}MB)`)
 
           const response = await fetch('/api/upload', {
             method: 'POST',
@@ -511,6 +416,7 @@ export default function UploadComponent({ categories, onUploadComplete }: Upload
                 : f
             ))
             console.log('✅ Upload successful:', responseData.data)
+            toast.success(`${uploadFile.mediaType} uploaded successfully`)
           } else {
             throw new Error(responseData.error || 'Upload failed')
           }
@@ -530,18 +436,18 @@ export default function UploadComponent({ categories, onUploadComplete }: Upload
       const errorCount = files.filter(f => f.status === 'error').length
       
       if (successCount > 0) {
-        toast.success(`${successCount} images uploaded successfully`)
+        toast.success(`${successCount} files uploaded successfully`)
 
         const uploadEvent = new CustomEvent('uploadSuccess', {
-        detail: { successCount, categoryId: selectedCategoryId }
-      })
-      window.dispatchEvent(uploadEvent)
+          detail: { successCount, categoryId: selectedCategoryId }
+        })
+        window.dispatchEvent(uploadEvent)
 
         onUploadComplete()
       }
 
       if (errorCount > 0) {
-        toast.error(`${errorCount} images failed to upload`)
+        toast.error(`${errorCount} files failed to upload`)
       }
 
       setTimeout(() => {
@@ -594,14 +500,6 @@ export default function UploadComponent({ categories, onUploadComplete }: Upload
           {selectedCategory && (
             <p className="text-gray-300">Selected: <span className="text-white">{selectedCategory.name}</span></p>
           )}
-          {categories.length > 0 && (
-            <details className="mt-2">
-              <summary className="text-blue-400 cursor-pointer text-xs">View Raw Categories</summary>
-              <pre className="text-xs text-gray-300 bg-gray-900 p-2 rounded mt-1 overflow-auto max-h-32">
-                {JSON.stringify(categories, null, 2)}
-              </pre>
-            </details>
-          )}
         </div>
       </div>
 
@@ -641,7 +539,7 @@ export default function UploadComponent({ categories, onUploadComplete }: Upload
           ref={fileInputRef}
           type="file"
           multiple
-          accept="image/*"
+          accept="image/*,video/*"
           onChange={(e) => {
             if (e.target.files) {
               handleFiles(e.target.files)
@@ -658,10 +556,13 @@ export default function UploadComponent({ categories, onUploadComplete }: Upload
           
           <div>
             <p className="text-white font-medium mb-2">
-              Drop images here or click to browse
+              Drop images or videos here or click to browse
             </p>
             <p className="text-gray-400 text-sm">
-              Supports JPG, PNG, WebP. Files over 9MB will be compressed to ~4.5MB.
+              Images: JPG, PNG, WebP (up to 50MB) • Videos: MP4, MOV, WebM (up to 100MB)
+            </p>
+            <p className="text-gray-400 text-xs mt-1">
+              Large files will be automatically optimized
             </p>
           </div>
         </div>
@@ -712,12 +613,28 @@ export default function UploadComponent({ categories, onUploadComplete }: Upload
                 >
                   <div className="flex space-x-3">
                     <div className="w-16 h-16 relative flex-shrink-0 bg-gray-700 rounded overflow-hidden">
-                      <Image
-                        src={uploadFile.preview}
-                        alt={uploadFile.title}
-                        fill
-                        className="object-cover"
-                      />
+                      {uploadFile.mediaType === 'image' ? (
+                        <Image
+                          src={uploadFile.preview}
+                          alt={uploadFile.title}
+                          fill
+                          className="object-cover"
+                        />
+                      ) : (
+                        <VideoPreview 
+                          src={uploadFile.thumbnail || uploadFile.preview} 
+                          className="w-full h-full"
+                        />
+                      )}
+                      
+                      {/* Media type indicator */}
+                      <div className="absolute top-1 right-1 bg-black/70 p-1 rounded">
+                        {uploadFile.mediaType === 'image' ? (
+                          <ImageIcon className="w-3 h-3 text-white" />
+                        ) : (
+                          <VideoIcon className="w-3 h-3 text-white" />
+                        )}
+                      </div>
                     </div>
 
                     <div className="flex-1 min-w-0">
@@ -727,25 +644,17 @@ export default function UploadComponent({ categories, onUploadComplete }: Upload
                         onChange={(e) => updateFileTitle(uploadFile.id, e.target.value)}
                         disabled={uploadFile.status !== 'pending'}
                         className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white text-sm disabled:opacity-50"
-                        placeholder="Image title"
+                        placeholder={`${uploadFile.mediaType} title`}
                       />
                       
                       <div className="flex items-center justify-between mt-2">
-                        <span className="text-xs text-gray-400">
-                          {uploadFile.compressedFile ? (
-                            <>
-                              <span className="line-through text-red-400">
-                                {(uploadFile.originalFile.size / 1024 / 1024).toFixed(1)}MB
-                              </span>
-                              {' → '}
-                              <span className="text-green-400">
-                                {(uploadFile.compressedFile.size / 1024 / 1024).toFixed(1)}MB
-                              </span>
-                            </>
-                          ) : (
-                            `${(uploadFile.originalFile.size / 1024 / 1024).toFixed(1)}MB`
+                        <div className="text-xs text-gray-400">
+                          {/* Simple file size display for now */}
+                          {(uploadFile.file.size / 1024 / 1024).toFixed(1)}MB
+                          {uploadFile.duration && (
+                            <span className="ml-2">• {Math.floor(uploadFile.duration / 60)}:{(uploadFile.duration % 60).toFixed(0).padStart(2, '0')}</span>
                           )}
-                        </span>
+                        </div>
                         
                         <div className="flex items-center space-x-2">
                           {uploadFile.status === 'pending' && (
