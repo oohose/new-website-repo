@@ -6,6 +6,8 @@ import { v2 as cloudinary } from 'cloudinary';
 import { db } from "@/lib/db";
 import { revalidatePath } from 'next/cache';
 
+export const dynamic = 'force-dynamic'
+
 export const runtime = "nodejs";
 export const maxDuration = 300; // 5 minutes for video uploads
 

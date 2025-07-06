@@ -4,6 +4,8 @@ import { db } from '@/lib/db'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 
+export const dynamic = 'force-dynamic'
+
 // Helper function to generate a unique key
 async function generateUniqueKey(name: string, parentId?: string): Promise<string> {
   // Base key generation
