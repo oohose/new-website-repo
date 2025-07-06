@@ -53,24 +53,24 @@ export async function uploadToCloudinary(
 ): Promise<CloudinaryUploadResult> {
   
   const defaultImageOptions: UploadApiOptions = {
-    // Remove default folder - let the caller specify the exact folder
-    quality: 'auto:good',
     resource_type: 'image',
+    quality: 'auto:best', // Changed from auto:good to auto:best for better quality
+    format: 'auto', // Let Cloudinary choose the best format
     transformation: [
       {
-        width: 2048,
-        height: 2048,
+        width: 3840, // Increased from 2048 to support 4K
+        height: 3840,
         crop: 'limit',
-        quality: 'auto:good'
+        quality: 'auto:best',
+        fetch_format: 'auto'
       }
     ]
   };
 
   const defaultVideoOptions: UploadApiOptions = {
-    // Remove default folder - let the caller specify the exact folder
     resource_type: 'video',
-    quality: 'auto:good',
-    // Generate thumbnail at 1 second mark
+    quality: 'auto:best', // Better quality for videos
+    // Generate multiple thumbnails for better selection
     eager: [
       {
         width: 400,
@@ -79,16 +79,28 @@ export async function uploadToCloudinary(
         gravity: 'center',
         format: 'jpg',
         start_offset: '1'
+      },
+      {
+        width: 800,
+        height: 600,
+        crop: 'fill',
+        gravity: 'center',
+        format: 'jpg',
+        start_offset: '2'
       }
     ],
-    // Video optimization settings
+    // Enhanced video optimization settings
     video_codec: 'h264',
     audio_codec: 'aac',
     transformation: [
       {
-        quality: 'auto:good',
+        quality: 'auto:best',
         video_codec: 'h264',
-        audio_codec: 'aac'
+        audio_codec: 'aac',
+        width: 1920, // Max 1080p
+        height: 1080,
+        crop: 'limit',
+        bit_rate: '2m' // 2 Mbps max bitrate for good quality/size balance
       }
     ]
   };
@@ -97,7 +109,6 @@ export async function uploadToCloudinary(
   const defaultOptions = mediaType === 'video' ? defaultVideoOptions : defaultImageOptions;
 
   // Merge options - the passed options will override defaults
-  // Make sure the folder from options takes precedence
   const finalOptions: UploadApiOptions = { 
     ...defaultOptions, 
     ...options 
@@ -107,7 +118,8 @@ export async function uploadToCloudinary(
     folder: finalOptions.folder,
     public_id: finalOptions.public_id,
     tags: finalOptions.tags,
-    resource_type: finalOptions.resource_type
+    resource_type: finalOptions.resource_type,
+    quality: finalOptions.quality
   });
 
   return new Promise((resolve, reject) => {
@@ -129,10 +141,11 @@ export async function uploadToCloudinary(
             resource_type: result.resource_type
           });
 
-          // For videos, get the thumbnail URL if eager transformation was applied
+          // For videos, get the best thumbnail URL if eager transformation was applied
           let thumbnailUrl: string | undefined;
           if (mediaType === 'video' && result.eager && result.eager.length > 0) {
-            thumbnailUrl = result.eager[0].secure_url;
+            // Use the larger thumbnail (second one if available, first one as fallback)
+            thumbnailUrl = result.eager[result.eager.length - 1]?.secure_url || result.eager[0].secure_url;
           }
 
           const uploadResult: CloudinaryUploadResult = {
@@ -210,7 +223,7 @@ export function generateCloudinaryUrl(
   return cloudinary.url(publicId, {
     transformation: transformations,
     secure: true,
-    quality: 'auto:good',
+    quality: 'auto:best', // Enhanced quality
     fetch_format: 'auto',
     resource_type: resourceType
   });
@@ -230,7 +243,7 @@ export function getImageThumbnailUrl(
       height,
       crop: 'fill',
       gravity: 'center',
-      quality: 'auto:good'
+      quality: 'auto:best'
     }
   ], 'image');
 }
@@ -252,7 +265,7 @@ export function getVideoThumbnailUrl(
       gravity: 'center',
       format: 'jpg',
       start_offset: startOffset,
-      quality: 'auto:good'
+      quality: 'auto:best'
     }
   ], 'video');
 }
@@ -262,13 +275,13 @@ export function getVideoThumbnailUrl(
  */
 export function getImageDisplayUrl(
   publicId: string,
-  maxWidth: number = 1920
+  maxWidth: number = 2048
 ): string {
   return generateCloudinaryUrl(publicId, [
     {
       width: maxWidth,
       crop: 'limit',
-      quality: 'auto:good'
+      quality: 'auto:best'
     }
   ], 'image');
 }
@@ -278,13 +291,16 @@ export function getImageDisplayUrl(
  */
 export function getVideoDisplayUrl(
   publicId: string,
-  quality: string = 'auto:good'
+  quality: string = 'auto:best'
 ): string {
   return generateCloudinaryUrl(publicId, [
     {
       quality,
       video_codec: 'h264',
-      audio_codec: 'aac'
+      audio_codec: 'aac',
+      width: 1920,
+      height: 1080,
+      crop: 'limit'
     }
   ], 'video');
 }

@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth'
 import { v2 as cloudinary } from 'cloudinary';
 import { db } from "@/lib/db";
 import { revalidatePath } from 'next/cache';
+import { MediaCompressor } from '@/utils/mediaCompression'
 
 export const dynamic = 'force-dynamic'
 
@@ -166,12 +167,25 @@ export async function POST(req: NextRequest) {
 
     const sanitizedTitle = title.replace(/[^a-zA-Z0-9]/g, '_');
 
-    // Convert file to buffer and upload to Cloudinary
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    const base64 = buffer.toString('base64');
-    const dataURI = `data:${file.type};base64,${base64}`;
+    // 🔧 Compress the file if needed
+console.log('🛠 Attempting compression (if needed)...');
 
+const compressionResult = await MediaCompressor.compressIfNeeded(file);
+const compressedFile = compressionResult.file;
+
+if (compressionResult.wasCompressed) {
+  const originalMB = (compressionResult.originalSize / 1024 / 1024).toFixed(2);
+  const compressedMB = (compressionResult.compressedSize / 1024 / 1024).toFixed(2);
+  console.log(`🗜️ Compressed ${file.name}: ${originalMB}MB → ${compressedMB}MB (${compressionResult.compressionRatio.toFixed(2)}x)`);
+} else {
+  console.log(`✅ No compression needed for ${file.name}`);
+}
+
+// Convert compressed file to base64 for Cloudinary
+const bytes = await compressedFile.arrayBuffer();
+const buffer = Buffer.from(bytes);
+const base64 = buffer.toString('base64');
+const dataURI = `data:${compressedFile.type};base64,${base64}`;
     console.log(`☁️ Uploading ${mediaType} to Cloudinary...`);
 
     let uploadResponse;

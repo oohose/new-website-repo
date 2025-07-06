@@ -19,6 +19,8 @@ import {
 import Image from 'next/image'
 import toast from 'react-hot-toast'
 import { Category, UploadFile } from '@/lib/types'
+import { MediaCompressor } from '@/utils/mediaCompression'
+
 
 interface CategoryPickerProps {
   categories: Category[]
@@ -264,53 +266,92 @@ export default function UploadComponent({ categories, onUploadComplete }: Upload
     }
   }, [files])
 
-  const handleFiles = useCallback(async (newFiles: FileList | File[]) => {
-    const fileArray = Array.from(newFiles)
-    const validFiles = fileArray.filter(file => {
-      const fileType = file.type.toLowerCase();
-      const supportedTypes = [
-        'image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif',
-        'video/mp4', 'video/quicktime', 'video/mov', 'video/avi', 'video/webm', 'video/mkv'
-      ];
-      
-      if (!supportedTypes.includes(fileType)) {
-        toast.error(`${file.name} is not a supported file type`)
-        return false
-      }
-      return true
-    })
+const handleFiles = useCallback(async (newFiles: FileList | File[]) => {
+  const fileArray = Array.from(newFiles)
 
-    const uploadFilesPromises = validFiles.map(async (file): Promise<UploadFile | null> => {
-      try {
-        const mediaType = file.type.startsWith('image/') ? 'image' : 'video'
-        
-        // Create preview
-        const preview = URL.createObjectURL(file)
-        
-        return {
-          id: Math.random().toString(36),
-          file: file,
-          originalFile: file,
-          preview,
-          status: 'pending' as const,
-          progress: 0,
-          title: file.name.replace(/\.[^/.]+$/, ''),
-          mediaType,
-          duration: undefined,
-          thumbnail: undefined
-        }
-        
-      } catch (error) {
-        console.error('File processing failed:', error)
-        toast.error(`Failed to process ${file.name}`)
-        return null
-      }
-    })
+  // Filter for supported types first
+  const validFiles = fileArray.filter(file => {
+    if (!MediaCompressor.isSupportedMediaType(file)) {
+      toast.error(`${file.name} is not a supported file type`)
+      return false
+    }
+    return true
+  })
 
+  // Show loading state for compression
+  if (validFiles.length > 0) {
+    toast.loading(`Processing ${validFiles.length} file(s)...`, {
+      id: 'compression-toast',
+      duration: Infinity,
+    })
+  }
+
+  const uploadFilesPromises = validFiles.map(async (file): Promise<UploadFile | null> => {
+    try {
+      const originalSizeMB = file.size / (1024 * 1024)
+      console.log(`📁 Processing ${file.name}: ${originalSizeMB.toFixed(2)}MB`)
+
+      // ✨ COMPRESSION HAPPENS HERE ✨
+      const compressionResult = await MediaCompressor.compressIfNeeded(file)
+      const processedFile = compressionResult.file
+      const mediaType = file.type.startsWith('image/') ? 'image' : 'video'
+
+      if (compressionResult.wasCompressed) {
+        const originalMB = compressionResult.originalSize / (1024 * 1024)
+        const compressedMB = compressionResult.compressedSize / (1024 * 1024)
+        console.log(`🗜️ Compressed ${file.name}: ${originalMB.toFixed(2)}MB → ${compressedMB.toFixed(2)}MB (${compressionResult.compressionRatio.toFixed(2)}x)`)
+        toast.success(
+          `Compressed ${file.name}: ${originalMB.toFixed(1)}MB → ${compressedMB.toFixed(1)}MB`,
+          { duration: 3000 }
+        )
+      }
+
+      const preview = compressionResult.thumbnail || URL.createObjectURL(processedFile)
+
+      return {
+        id: Math.random().toString(36),
+        file: processedFile,
+        originalFile: file,
+        preview,
+        status: 'pending' as const,
+        progress: 0,
+        title: file.name.replace(/\.[^/.]+$/, ''),
+        mediaType,
+        duration: compressionResult.duration,
+        thumbnail: compressionResult.thumbnail,
+      }
+    } catch (error) {
+      console.error('❌ File processing failed:', error)
+
+      const errorMessage =
+        error instanceof Error ? error.message : 'An unknown error occurred'
+
+      toast.error(`Failed to process ${file.name}: ${errorMessage}`)
+      return null
+    }
+  })
+
+  try {
     const uploadFilesResults = await Promise.all(uploadFilesPromises)
     const validUploadFiles = uploadFilesResults.filter((file): file is UploadFile => file !== null)
-    setFiles(prev => [...prev, ...validUploadFiles])
-  }, [])
+
+    toast.dismiss('compression-toast')
+
+    if (validUploadFiles.length > 0) {
+      setFiles(prev => [...prev, ...validUploadFiles])
+      toast.success(`${validUploadFiles.length} file(s) ready for upload!`)
+    }
+  } catch (error) {
+    toast.dismiss('compression-toast')
+    console.error('❌ Batch file processing failed:', error)
+
+    const errorMessage =
+      error instanceof Error ? error.message : 'An unknown batch error occurred'
+
+    toast.error(`Failed to process some files: ${errorMessage}`)
+  }
+}, [])
+
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
