@@ -64,336 +64,126 @@ async function getNextOrderValue(categoryId: string, mediaType: 'image' | 'video
 
 export async function POST(req: NextRequest) {
   try {
-    console.log('🚀 Upload API called - Clean version');
-    
-    // Check authentication
-    const session = await getServerSession(authOptions)
+    console.log('🚀 Metadata-only Upload API called');
+
+    const session = await getServerSession(authOptions);
     if (!session || (session.user as any)?.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check environment variables
-    if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
-      console.error('❌ Missing Cloudinary environment variables');
+    const contentType = req.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
       return NextResponse.json(
-        { success: false, error: "Cloudinary configuration missing" },
-        { status: 500 }
+        {
+          success: false,
+          error: 'Invalid content type',
+          details: 'Expected application/json',
+        },
+        { status: 400 }
       );
     }
 
-    // Parse form data
-    const formData = await req.formData();
-    const file = formData.get("file") as File;
-    const title = formData.get("title") as string;
-    const categoryId = formData.get("categoryId") as string;
-    const description = formData.get("description") as string;
+    const body = await req.json();
 
-    console.log('📝 Upload details:', {
-      fileName: file?.name,
-      fileSize: file ? `${(file.size / 1024 / 1024).toFixed(2)}MB` : 'No file',
-      fileType: file?.type,
+    const {
+      url,
+      cloudinaryId,
       title,
       categoryId,
-      description
-    });
+      width,
+      height,
+      format,
+      bytes,
+      duration,
+      mediaType,
+      thumbnailUrl,
+    } = body;
 
-    // Validate inputs
-    if (!file || !title || !categoryId) {
+    if (!url || !cloudinaryId || !title || !mediaType || !categoryId) {
       return NextResponse.json(
-        { success: false, error: "Missing required fields" },
+        { success: false, error: 'Missing required fields' },
         { status: 400 }
       );
     }
 
-    // Determine media type and validate
-    let mediaType: 'image' | 'video';
-    try {
-      mediaType = getMediaType(file);
-    } catch (error: any) {
-      return NextResponse.json(
-        { success: false, error: error.message },
-        { status: 400 }
-      );
-    }
-
-    // Check file size limits
-    const maxImageSize = 50 * 1024 * 1024; // 50MB for images
-    const maxVideoSize = 100 * 1024 * 1024; // 100MB for videos
-    const maxSize = mediaType === 'video' ? maxVideoSize : maxImageSize;
-    
-    if (file.size > maxSize) {
-      const sizeMB = (file.size / 1024 / 1024).toFixed(1);
-      const limitMB = mediaType === 'video' ? '100' : '50';
-      return NextResponse.json(
-        { success: false, error: `${mediaType} size ${sizeMB}MB exceeds ${limitMB}MB limit` },
-        { status: 400 }
-      );
-    }
-
-    // Get category
     const category = await db.category.findUnique({
       where: { id: categoryId },
-      select: { 
-        id: true, 
-        key: true, 
-        name: true, 
-        parent: { 
-          select: { key: true, name: true } 
-        } 
-      }
+      select: { id: true, key: true, name: true, parent: { select: { key: true } } },
     });
 
     if (!category) {
       return NextResponse.json(
-        { success: false, error: "Category not found" },
+        { success: false, error: 'Category not found' },
         { status: 400 }
       );
     }
 
-    console.log('✅ Category found:', category.name);
-
-    // Create folder path
-    let folderPath = "peysphotos";
-    if (category.parent) {
-      folderPath = `peysphotos/${category.parent.key}/${category.key}`;
-    } else {
-      folderPath = `peysphotos/${category.key}`;
-    }
-
-    // Add media type subfolder for videos
-    if (mediaType === 'video') {
-      folderPath += '/videos';
-    }
-
-    const sanitizedTitle = title.replace(/[^a-zA-Z0-9]/g, '_');
-
-    // 🔧 Compress the file if needed
-console.log('🛠 Attempting compression (if needed)...');
-
-const compressionResult = await MediaCompressor.compressIfNeeded(file);
-const compressedFile = compressionResult.file;
-
-if (compressionResult.wasCompressed) {
-  const originalMB = (compressionResult.originalSize / 1024 / 1024).toFixed(2);
-  const compressedMB = (compressionResult.compressedSize / 1024 / 1024).toFixed(2);
-  console.log(`🗜️ Compressed ${file.name}: ${originalMB}MB → ${compressedMB}MB (${compressionResult.compressionRatio.toFixed(2)}x)`);
-} else {
-  console.log(`✅ No compression needed for ${file.name}`);
-}
-
-// Convert compressed file to base64 for Cloudinary
-const bytes = await compressedFile.arrayBuffer();
-const buffer = Buffer.from(bytes);
-const base64 = buffer.toString('base64');
-const dataURI = `data:${compressedFile.type};base64,${base64}`;
-    console.log(`☁️ Uploading ${mediaType} to Cloudinary...`);
-
-    let uploadResponse;
-    let thumbnailUrl: string | undefined; // Declare outside try block
-    
-    try {
-      if (mediaType === 'video') {
-        console.log('📤 Using base64 upload method for video...');
-
-        uploadResponse = await cloudinary.uploader.upload(dataURI, {
-          folder: folderPath,
-          public_id: `${Date.now()}_${sanitizedTitle}`,
-          resource_type: "video",
-          quality: "auto",
-          eager: [
-            {
-              width: 400,
-              height: 300,
-              crop: "fill",
-              gravity: "center",
-              format: "jpg",
-              start_offset: "1"
-            }
-          ],
-          eager_async: false,
-          tags: ['peyton-portfolio', 'video', category.key]
-        });
-      } else {
-        console.log('📤 Using base64 upload method for image...');
-
-        uploadResponse = await cloudinary.uploader.upload(dataURI, {
-          folder: folderPath,
-          public_id: `${Date.now()}_${sanitizedTitle}`,
-          resource_type: "image",
-          transformation: [
-            { quality: "auto:good" },
-            { fetch_format: "auto" }
-          ],
-          tags: ['peyton-portfolio', 'image', category.key]
-        });
-      }
-
-      console.log(`✅ Cloudinary ${mediaType} upload successful:`, {
-        public_id: uploadResponse.public_id,
-        secure_url: uploadResponse.secure_url,
-        width: uploadResponse.width,
-        height: uploadResponse.height,
-        format: uploadResponse.format,
-        bytes: uploadResponse.bytes,
-        duration: uploadResponse.duration,
-        eager: uploadResponse.eager ? uploadResponse.eager.length : 0
-      });
-
-      // For videos, get the thumbnail URL from eager transformations
-      if (mediaType === 'video' && uploadResponse.eager && uploadResponse.eager.length > 0) {
-        thumbnailUrl = uploadResponse.eager[0].secure_url;
-        console.log('📸 Video thumbnail generated:', thumbnailUrl);
-      }
-
-    } catch (cloudinaryError: any) {
-      console.error(`❌ Cloudinary ${mediaType} upload failed:`, {
-        name: cloudinaryError.name,
-        message: cloudinaryError.message,
-        http_code: cloudinaryError.http_code,
-        error: cloudinaryError.error
-      });
-      
-      let errorMessage = `Cloudinary ${mediaType} upload failed`;
-      if (cloudinaryError.http_code === 401) {
-        errorMessage = "Cloudinary authentication failed";
-      } else if (cloudinaryError.http_code === 400) {
-        errorMessage = `Invalid ${mediaType} file or parameters`;
-      } else if (cloudinaryError.message) {
-        errorMessage = cloudinaryError.message;
-      }
-      
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: errorMessage,
-          details: cloudinaryError.message
-        },
-        { status: 500 }
-      );
-    }
-
-    // Save to appropriate database table
-    console.log(`💾 Saving ${mediaType} to database...`);
-    
     const nextOrder = await getNextOrderValue(categoryId, mediaType);
-    
+
     let savedMedia;
-    
+
     if (mediaType === 'image') {
       savedMedia = await db.image.create({
         data: {
-          title: title,
-          description: description || null,
-          cloudinaryId: uploadResponse.public_id,
-          url: uploadResponse.secure_url,
-          width: uploadResponse.width,
-          height: uploadResponse.height,
-          format: uploadResponse.format,
-          bytes: uploadResponse.bytes,
-          isHeader: false,
+          title,
+          url,
+          cloudinaryId,
+          width,
+          height,
+          format,
+          bytes,
           order: nextOrder,
-          categoryId: categoryId,
+          categoryId,
         },
-        include: {
-          category: true
-        }
+        include: { category: true },
       });
     } else {
       savedMedia = await db.video.create({
         data: {
-          title: title,
-          description: description || null,
-          cloudinaryId: uploadResponse.public_id,
-          url: uploadResponse.secure_url,
-          thumbnailUrl: thumbnailUrl || null,
-          width: uploadResponse.width,
-          height: uploadResponse.height,
-          duration: uploadResponse.duration || null,
-          format: uploadResponse.format,
-          bytes: uploadResponse.bytes,
-          bitrate: uploadResponse.bit_rate || null,
-          frameRate: uploadResponse.frame_rate || null,
+          title,
+          url,
+          cloudinaryId,
+          width,
+          height,
+          format,
+          bytes,
+          duration,
+          thumbnailUrl,
           order: nextOrder,
-          categoryId: categoryId,
+          categoryId,
         },
-        include: {
-          category: true
-        }
+        include: { category: true },
       });
     }
 
-    console.log(`✅ Saved ${mediaType} to database:`, savedMedia.id);
+    console.log(`✅ Saved ${mediaType} to DB with ID:`, savedMedia.id);
 
-    // 🚨 CACHE INVALIDATION - This is the key fix!
-    try {
-  console.log('🔄 Invalidating caches with comprehensive method...');
-  
-  // Import revalidation functions
-  const { revalidatePath, revalidateTag } = await import('next/cache');
-  
-  // STEP 1: Revalidate specific tags (this is the key missing piece!)
-  revalidateTag(`gallery-${category.key}`);
-  revalidateTag('media');
-  revalidateTag('categories');
-  revalidateTag('images');
-  revalidateTag('videos');
-  
-  // STEP 2: Revalidate specific gallery pages
-  revalidatePath(`/gallery/${category.key}`, 'page');
-  revalidatePath('/gallery/[key]', 'page'); // Dynamic route
-  
-  // STEP 3: Revalidate API routes
-  revalidatePath('/api/media');
-  revalidatePath('/api/categories');
-  
-  // STEP 4: Revalidate home page (portfolio section)
-  revalidatePath('/', 'page');
-  
-  // STEP 5: If this is a subcategory, also revalidate parent
-  if (category.parent) {
-    revalidateTag(`gallery-${category.parent.key}`);
-    revalidatePath(`/gallery/${category.parent.key}`, 'page');
-  }
-  
-  // STEP 6: Force a cache-busting timestamp for debugging
-  const timestamp = Date.now();
-  console.log('✅ Enhanced cache invalidation complete at:', new Date(timestamp).toISOString());
-  
-  // STEP 7: Optional delay to ensure cache clearing propagates
-  await new Promise(resolve => setTimeout(resolve, 200));
-  
-} catch (revalidateError) {
-  console.error('❌ Cache revalidation failed:', revalidateError);
-  // Don't fail the upload if cache revalidation fails
-}
+    // Revalidate cache here if needed
+    // ...
+
     return NextResponse.json({
       success: true,
-      message: `${mediaType.charAt(0).toUpperCase() + mediaType.slice(1)} uploaded successfully`,
+      message: `${mediaType} metadata saved`,
       data: {
         id: savedMedia.id,
-        cloudinaryId: uploadResponse.public_id,
-        url: uploadResponse.secure_url,
-        thumbnailUrl: thumbnailUrl,
-        title,
-        categoryId,
-        categoryKey: category.key, // Include category key for frontend
-        width: uploadResponse.width,
-        height: uploadResponse.height,
-        duration: uploadResponse.duration,
-        format: uploadResponse.format,
-        size: uploadResponse.bytes,
-        mediaType
-      }
+        url,
+        cloudinaryId,
+        mediaType,
+        width,
+        height,
+        duration,
+        format,
+        thumbnailUrl,
+        categoryKey: category.key,
+      },
     });
-
-  } catch (error: any) {
-    console.error('💥 Upload error:', error);
-    
+  } catch (err: any) {
+    console.error('❌ Upload metadata error:', err);
     return NextResponse.json(
-      { 
-        success: false, 
-        error: "Upload failed",
-        details: error.message
+      {
+        success: false,
+        error: 'Upload failed',
+        details: err.message,
       },
       { status: 500 }
     );

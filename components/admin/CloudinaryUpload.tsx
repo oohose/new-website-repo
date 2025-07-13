@@ -398,189 +398,122 @@ const handleFiles = useCallback(async (newFiles: FileList | File[]) => {
     ))
   }, [])
 
-  const uploadFiles = async () => {
-    if (!selectedCategoryId) {
-      toast.error('Please select a category')
-      return
-    }
+const uploadFiles = async () => {
+  if (!selectedCategoryId) {
+    toast.error('Please select a category')
+    return
+  }
 
-    if (files.length === 0) {
-      toast.error('Please select files to upload')
-      return
-    }
+  if (files.length === 0) {
+    toast.error('Please select files to upload')
+    return
+  }
 
-    setIsUploading(true)
-    let successfulUploads = 0
+  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME
+  const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET
 
-    try {
-      const uploadPromises = files.map(async (uploadFile) => {
-        if (uploadFile.status !== 'pending') return
+  if (!cloudName || !uploadPreset) {
+    toast.error('Cloudinary config missing')
+    return
+  }
 
-        setFiles(prev => prev.map(f => 
-          f.id === uploadFile.id 
+  setIsUploading(true)
+  let successfulUploads = 0
+
+  try {
+    const uploadPromises = files.map(async (uploadFile) => {
+      if (uploadFile.status !== 'pending') return
+
+      setFiles(prev =>
+        prev.map(f =>
+          f.id === uploadFile.id
             ? { ...f, status: 'uploading', progress: 0 }
             : f
-        ))
+        )
+      )
 
-        try {
-          const formData = new FormData()
-          const fileToUpload = uploadFile.file
-          formData.append('file', fileToUpload)
-          formData.append('title', uploadFile.title)
-          formData.append('categoryId', selectedCategoryId)
+      try {
+        const formData = new FormData()
+        formData.append('file', uploadFile.file)
+        formData.append('upload_preset', uploadPreset)
 
-          console.log(`📤 Uploading ${uploadFile.mediaType}: ${uploadFile.title} (${(fileToUpload.size / 1024 / 1024).toFixed(2)}MB)`)
-
-          const response = await fetch('/api/upload', {
+        const cloudinaryRes = await fetch(
+          `https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`,
+          {
             method: 'POST',
             body: formData,
-          })
-
-          const contentType = response.headers.get('content-type')
-          let responseData
-          
-          if (contentType && contentType.includes('application/json')) {
-            responseData = await response.json()
-          } else {
-            const textResponse = await response.text()
-            console.error('Non-JSON response:', textResponse.substring(0, 200))
-            throw new Error(`Server error: ${response.status} ${response.statusText}`)
           }
+        )
 
-          if (response.ok && responseData.success) {
-            setFiles(prev => prev.map(f => 
-              f.id === uploadFile.id 
-                ? { ...f, status: 'success', progress: 100 }
-                : f
-            ))
-            
-            console.log('✅ Upload successful:', responseData.data)
-            successfulUploads++
-            
-            // ENHANCED SUCCESS HANDLING WITH COMPREHENSIVE REVALIDATION
-            try {
-              console.log('🔄 Starting post-upload revalidation...')
-              
-              // Step 1: Call our enhanced revalidation endpoint
-              const revalidateResponse = await fetch('/api/revalidate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                  categoryKey: responseData.data.categoryKey,
-                  action: 'upload',
-                  mediaType: uploadFile.mediaType
-                })
-              });
-              
-              if (revalidateResponse.ok) {
-                const revalidateData = await revalidateResponse.json()
-                console.log('✅ Post-upload revalidation successful:', revalidateData);
-              } else {
-                console.error('❌ Revalidation endpoint failed:', await revalidateResponse.text());
-              }
-              
-              // Step 2: Additional cache busting
-              try {
-                // Force a direct API call to refresh the specific gallery
-                const bustResponse = await fetch(`/api/media?categoryKey=${responseData.data.categoryKey}&t=${Date.now()}`, {
-                  cache: 'no-store',
-                  headers: { 'Cache-Control': 'no-cache' }
-                });
-                console.log('🔄 Cache bust fetch completed:', bustResponse.ok);
-              } catch (bustError) {
-                console.warn('Cache bust fetch failed:', bustError);
-              }
-              
-              // Step 3: Force browser cache clearing
-              if (typeof window !== 'undefined') {
-                // Clear any browser caches related to galleries
-                if ('caches' in window) {
-                  caches.keys().then(names => {
-                    names.forEach(name => {
-                      if (name.includes('gallery') || name.includes('media') || name.includes('api')) {
-                        caches.delete(name);
-                        console.log('🗑️ Cleared browser cache:', name);
-                      }
-                    });
-                  });
-                }
-              }
-              
-            } catch (revalidateError) {
-              console.error('❌ Post-upload revalidation failed:', revalidateError);
-            }
-            
-            toast.success(`${uploadFile.mediaType} uploaded successfully`)
-            
-          } else {
-            throw new Error(responseData.error || 'Upload failed')
-          }
-        } catch (error: any) {
-          console.error('❌ Upload failed for', uploadFile.title, ':', error)
-          setFiles(prev => prev.map(f => 
-            f.id === uploadFile.id 
+        const cloudinaryData = await cloudinaryRes.json()
+
+        if (!cloudinaryRes.ok || cloudinaryData.error) {
+          throw new Error(cloudinaryData.error?.message || 'Cloudinary upload failed')
+        }
+
+        // ✅ Save to DB via your API route (lightweight)
+        const saveRes = await fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url: cloudinaryData.secure_url,
+            cloudinaryId: cloudinaryData.public_id,
+            width: cloudinaryData.width,
+            height: cloudinaryData.height,
+            format: cloudinaryData.format,
+            bytes: cloudinaryData.bytes,
+            title: uploadFile.title,
+            mediaType: uploadFile.mediaType,
+            duration: uploadFile.duration,
+            categoryId: selectedCategoryId,
+          }),
+        })
+
+        if (!saveRes.ok) {
+          throw new Error(await saveRes.text())
+        }
+
+        setFiles(prev =>
+          prev.map(f =>
+            f.id === uploadFile.id
+              ? { ...f, status: 'success', progress: 100 }
+              : f
+          )
+        )
+
+        toast.success(`${uploadFile.mediaType} uploaded successfully`)
+        successfulUploads++
+      } catch (error: any) {
+        console.error('❌ Upload failed for', uploadFile.title, ':', error)
+        setFiles(prev =>
+          prev.map(f =>
+            f.id === uploadFile.id
               ? { ...f, status: 'error', error: error.message }
               : f
-          ))
-          toast.error(`Failed to upload ${uploadFile.title}`)
-        }
-      })
-
-      await Promise.all(uploadPromises)
-      
-      const errorCount = files.filter(f => f.status === 'error').length
-      
-      if (successfulUploads > 0) {
-        console.log(`🎉 Upload batch complete: ${successfulUploads} successful uploads`)
-        
-        // Fire the upload success event for portfolio refresh with more data
-        const uploadEvent = new CustomEvent('uploadSuccess', {
-          detail: { 
-            successCount: successfulUploads, 
-            categoryId: selectedCategoryId,
-            categoryKey: files.find(f => f.status === 'success')?.title, // Try to get category key
-            timestamp: Date.now(),
-            forceRefresh: true
-          }
-        })
-        window.dispatchEvent(uploadEvent)
-
-        // Call the onUploadComplete callback
-        onUploadComplete()
-
-        // Additional forced refresh after a delay
-        setTimeout(() => {
-          console.log('🔄 Secondary refresh trigger...')
-          // Try to trigger a page refresh through router if available
-          if (typeof window !== 'undefined' && window.location) {
-            // Force a gentle refresh of dynamic content
-            const refreshEvent = new Event('visibilitychange')
-            document.dispatchEvent(refreshEvent)
-          }
-        }, 1000)
-        
-        // Add a small delay then show final success message
-        setTimeout(() => {
-          toast.success(`🎉 All uploads complete! ${successfulUploads} files uploaded successfully`)
-        }, 500)
+          )
+        )
+        toast.error(`Failed to upload ${uploadFile.title}`)
       }
+    })
 
-      if (errorCount > 0) {
-        toast.error(`${errorCount} files failed to upload`)
-      }
+    await Promise.all(uploadPromises)
 
-      // Clean up successful uploads after showing them briefly
+    if (successfulUploads > 0) {
+      toast.success(`🎉 Upload complete! ${successfulUploads} file(s) uploaded`)
+      onUploadComplete()
+
       setTimeout(() => {
         setFiles(prev => prev.filter(f => f.status !== 'success'))
       }, 3000)
-
-    } catch (error) {
-      console.error('❌ Upload batch error:', error)
-      toast.error('Upload failed')
-    } finally {
-      setIsUploading(false)
     }
+  } catch (error) {
+    console.error('❌ Upload batch error:', error)
+    toast.error('Upload failed')
+  } finally {
+    setIsUploading(false)
   }
+}
+
 
   // Find selected category (could be parent or subcategory)
   const findSelectedCategory = (): Category | null => {
